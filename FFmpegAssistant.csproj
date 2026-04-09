@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Title>FFmpeg Assist</Title>
+    <Company>SweWolf Software</Company>
+    <Authors>Uffe Peter Walderö</Authors>
   </PropertyGroup>
 
 </Project>
