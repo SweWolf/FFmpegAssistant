@@ -38,11 +38,17 @@ namespace FFmpegAssistant
             btnRun = new Button();
             btnCancel = new Button();
             dgvProgress = new DataGridView();
-            progressBar = new ProgressBar();
+            progressBar = new TextProgressBar();
             btnOpenFile = new Button();
             btnOpenFolder = new Button();
             btnOpenLogFile = new Button();
+            lblEstimatedRemaining = new Label();
+            menuStrip = new MenuStrip();
+            menuHelp = new ToolStripMenuItem();
+            menuAbout = new ToolStripMenuItem();
+            btnClear = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
+            menuStrip.SuspendLayout();
             SuspendLayout();
             // 
             // txtOriginalCommand
@@ -121,22 +127,22 @@ namespace FFmpegAssistant
             btnRun.Location = new Point(12, 290);
             btnRun.Name = "btnRun";
             btnRun.Size = new Size(153, 36);
-            btnRun.TabIndex = 7;
+            btnRun.TabIndex = 4;
             btnRun.Text = "Run";
             btnRun.UseVisualStyleBackColor = true;
             btnRun.Click += btnRun_Click;
-            //
+            // 
             // btnCancel
-            //
+            // 
             btnCancel.Font = new Font("Segoe UI", 12F);
             btnCancel.Location = new Point(187, 290);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(153, 36);
-            btnCancel.TabIndex = 13;
+            btnCancel.TabIndex = 5;
             btnCancel.Text = "Cancel";
             btnCancel.UseVisualStyleBackColor = true;
             btnCancel.Click += btnCancel_Click;
-            //
+            // 
             // dgvProgress
             // 
             dgvProgress.AllowUserToAddRows = false;
@@ -149,8 +155,8 @@ namespace FFmpegAssistant
             dgvProgress.ReadOnly = true;
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvProgress.Size = new Size(776, 93);
-            dgvProgress.TabIndex = 8;
+            dgvProgress.Size = new Size(776, 72);
+            dgvProgress.TabIndex = 7;
             dgvProgress.TabStop = false;
             // 
             // progressBar
@@ -168,9 +174,10 @@ namespace FFmpegAssistant
             btnOpenFile.Location = new Point(12, 487);
             btnOpenFile.Name = "btnOpenFile";
             btnOpenFile.Size = new Size(153, 36);
-            btnOpenFile.TabIndex = 10;
+            btnOpenFile.TabIndex = 8;
             btnOpenFile.Text = "Open File";
             btnOpenFile.UseVisualStyleBackColor = true;
+            btnOpenFile.Click += btnOpenFile_Click_1;
             // 
             // btnOpenFolder
             // 
@@ -179,9 +186,10 @@ namespace FFmpegAssistant
             btnOpenFolder.Location = new Point(187, 487);
             btnOpenFolder.Name = "btnOpenFolder";
             btnOpenFolder.Size = new Size(153, 36);
-            btnOpenFolder.TabIndex = 11;
+            btnOpenFolder.TabIndex = 9;
             btnOpenFolder.Text = "Open Folder";
             btnOpenFolder.UseVisualStyleBackColor = true;
+            btnOpenFolder.Click += btnOpenFolder_Click_1;
             // 
             // btnOpenLogFile
             // 
@@ -190,9 +198,54 @@ namespace FFmpegAssistant
             btnOpenLogFile.Location = new Point(363, 487);
             btnOpenLogFile.Name = "btnOpenLogFile";
             btnOpenLogFile.Size = new Size(153, 36);
-            btnOpenLogFile.TabIndex = 12;
+            btnOpenLogFile.TabIndex = 10;
             btnOpenLogFile.Text = "Open Log File";
             btnOpenLogFile.UseVisualStyleBackColor = true;
+            btnOpenLogFile.Click += btnOpenLogFile_Click_1;
+            // 
+            // lblEstimatedRemaining
+            // 
+            lblEstimatedRemaining.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            lblEstimatedRemaining.AutoSize = true;
+            lblEstimatedRemaining.Font = new Font("Segoe UI", 10F);
+            lblEstimatedRemaining.Location = new Point(12, 433);
+            lblEstimatedRemaining.Name = "lblEstimatedRemaining";
+            lblEstimatedRemaining.Size = new Size(186, 19);
+            lblEstimatedRemaining.TabIndex = 14;
+            lblEstimatedRemaining.Text = "Estimated remaining time: —";
+            // 
+            // menuStrip
+            // 
+            menuStrip.Items.AddRange(new ToolStripItem[] { menuHelp });
+            menuStrip.Location = new Point(0, 0);
+            menuStrip.Name = "menuStrip";
+            menuStrip.Size = new Size(800, 24);
+            menuStrip.TabIndex = 15;
+            // 
+            // menuHelp
+            // 
+            menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout });
+            menuHelp.Name = "menuHelp";
+            menuHelp.Size = new Size(44, 20);
+            menuHelp.Text = "Help";
+            // 
+            // menuAbout
+            // 
+            menuAbout.Name = "menuAbout";
+            menuAbout.Size = new Size(107, 22);
+            menuAbout.Text = "About";
+            menuAbout.Click += menuAbout_Click;
+            // 
+            // btnClear
+            // 
+            btnClear.Font = new Font("Segoe UI", 12F);
+            btnClear.Location = new Point(363, 290);
+            btnClear.Name = "btnClear";
+            btnClear.Size = new Size(153, 36);
+            btnClear.TabIndex = 6;
+            btnClear.Text = "Clear";
+            btnClear.UseVisualStyleBackColor = true;
+            btnClear.Click += btnClear_Click;
             // 
             // Form1
             // 
@@ -200,9 +253,11 @@ namespace FFmpegAssistant
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 535);
+            Controls.Add(btnClear);
             Controls.Add(btnOpenLogFile);
             Controls.Add(btnOpenFolder);
             Controls.Add(btnOpenFile);
+            Controls.Add(lblEstimatedRemaining);
             Controls.Add(progressBar);
             Controls.Add(dgvProgress);
             Controls.Add(label3);
@@ -214,10 +269,14 @@ namespace FFmpegAssistant
             Controls.Add(btnBrowseForFolder);
             Controls.Add(cboFolder);
             Controls.Add(txtOriginalCommand);
+            Controls.Add(menuStrip);
+            MainMenuStrip = menuStrip;
             Name = "Form1";
             Text = "FFmpeg Assistant";
             WindowState = FormWindowState.Maximized;
             ((System.ComponentModel.ISupportInitialize)dgvProgress).EndInit();
+            menuStrip.ResumeLayout(false);
+            menuStrip.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -234,9 +293,14 @@ namespace FFmpegAssistant
         private Button btnRun;
         private Button btnCancel;
         private DataGridView dgvProgress;
-        private ProgressBar progressBar;
+        private TextProgressBar progressBar;
         private Button btnOpenFile;
         private Button btnOpenFolder;
+        private MenuStrip menuStrip;
+        private ToolStripMenuItem menuHelp;
+        private ToolStripMenuItem menuAbout;
         private Button btnOpenLogFile;
+        private Label lblEstimatedRemaining;
+        private Button btnClear;
     }
 }

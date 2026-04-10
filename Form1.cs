@@ -6,9 +6,9 @@ namespace FFmpegAssistant
 {
     public partial class Form1 : Form
     {
-        private TimeSpan                 _totalDuration = TimeSpan.Zero;
-        private string?                  _lastOutputPath;
-        private string?                  _lastLogFile;
+        private TimeSpan _totalDuration = TimeSpan.Zero;
+        private string? _lastOutputPath;
+        private string? _lastLogFile;
         private CancellationTokenSource? _cts;
 
         private static readonly Regex DurationPattern =
@@ -35,6 +35,8 @@ namespace FFmpegAssistant
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+
             InitializeProgressGrid();
 
             string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
@@ -45,13 +47,11 @@ namespace FFmpegAssistant
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
 
-            btnOpenFile.Click    += btnOpenFile_Click;
-            btnOpenFolder.Click  += btnOpenFolder_Click;
             btnOpenLogFile.Click += btnOpenLogFile_Click;
 
-            btnOpenFile.Enabled    = false;
+            btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
-            btnCancel.Enabled      = false;
+            btnCancel.Enabled = false;
 
             if (Clipboard.ContainsText())
             {
@@ -76,27 +76,27 @@ namespace FFmpegAssistant
             dgvProgress.DefaultCellStyle.SelectionForeColor = dgvProgress.DefaultCellStyle.ForeColor;
 
             dgvProgress.EnableHeadersVisualStyles = false;
-            dgvProgress.ColumnHeadersDefaultCellStyle.BackColor          = Color.FromArgb(70, 70, 70);
-            dgvProgress.ColumnHeadersDefaultCellStyle.ForeColor          = Color.White;
-            dgvProgress.ColumnHeadersDefaultCellStyle.Font               = new Font("Segoe UI", 10F, FontStyle.Bold);
+            dgvProgress.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(70, 70, 70);
+            dgvProgress.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgvProgress.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(70, 70, 70);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
 
             var colProperty = new DataGridViewTextBoxColumn
             {
                 HeaderText = "Property",
-                Name       = "colProperty",
-                Width      = 100,
-                ReadOnly   = true,
-                SortMode   = DataGridViewColumnSortMode.NotSortable
+                Name = "colProperty",
+                Width = 100,
+                ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
             var colValue = new DataGridViewTextBoxColumn
             {
-                HeaderText   = "Value",
-                Name         = "colValue",
+                HeaderText = "Value",
+                Name = "colValue",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                ReadOnly     = true,
-                SortMode     = DataGridViewColumnSortMode.NotSortable
+                ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable
             };
             dgvProgress.Columns.Add(colProperty);
             dgvProgress.Columns.Add(colValue);
@@ -123,6 +123,7 @@ namespace FFmpegAssistant
             foreach (DataGridViewRow row in dgvProgress.Rows)
                 row.Cells["colValue"].Value = "";
             progressBar.Value = 0;
+            lblEstimatedRemaining.Text = "Estimated remaining time: —";
         }
 
         // -------------------------------------------------------------------------
@@ -151,28 +152,41 @@ namespace FFmpegAssistant
             var pm = ProgressPattern.Match(line);
             if (!pm.Success) return;
 
-            string frame   = pm.Groups[1].Value;
-            string fps     = pm.Groups[2].Value;
-            string size    = pm.Groups[3].Value;
-            string time    = pm.Groups[4].Value;
+            string frame = pm.Groups[1].Value;
+            string fps = pm.Groups[2].Value;
+            string size = pm.Groups[3].Value;
+            string time = pm.Groups[4].Value;
             string bitrate = pm.Groups[5].Value;
-            string speed   = pm.Groups[6].Value;
+            string speed = pm.Groups[6].Value;
             string elapsed = pm.Groups[7].Value;
 
             int percent = 0;
+            string estimatedRemaining = "—";
+
             if (_totalDuration > TimeSpan.Zero && TimeSpan.TryParse(time, out var current))
+            {
                 percent = Math.Min((int)(current.TotalSeconds / _totalDuration.TotalSeconds * 100), 100);
+
+                if (current.TotalSeconds > 0 && TimeSpan.TryParse(elapsed, out var elapsedTs) && elapsedTs.TotalSeconds > 0)
+                {
+                    double remainingSecs = elapsedTs.TotalSeconds
+                        * (_totalDuration.TotalSeconds - current.TotalSeconds)
+                        / current.TotalSeconds;
+                    estimatedRemaining = TimeSpan.FromSeconds(remainingSecs).ToString(@"h\:mm\:ss");
+                }
+            }
 
             Invoke(() =>
             {
-                UpdateGridRow("Frame",   frame);
-                UpdateGridRow("FPS",     fps);
-                UpdateGridRow("Size",    size);
-                UpdateGridRow("Time",    time);
+                UpdateGridRow("Frame", frame);
+                UpdateGridRow("FPS", fps);
+                UpdateGridRow("Size", size);
+                UpdateGridRow("Time", time);
                 UpdateGridRow("Bitrate", bitrate);
-                UpdateGridRow("Speed",   speed);
+                UpdateGridRow("Speed", speed);
                 UpdateGridRow("Elapsed", elapsed);
                 progressBar.Value = percent;
+                lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
             });
         }
 
@@ -193,9 +207,9 @@ namespace FFmpegAssistant
         private void btnBrowseForFolder_Click(object sender, EventArgs e)
         {
             using var dialog = new FolderBrowserDialog();
-            dialog.InitialDirectory    = cboFolder.Text;
+            dialog.InitialDirectory = cboFolder.Text;
             dialog.UseDescriptionForTitle = true;
-            dialog.Description         = "Select output folder";
+            dialog.Description = "Select output folder";
 
             if (dialog.ShowDialog() == DialogResult.OK)
             {
@@ -210,8 +224,8 @@ namespace FFmpegAssistant
         private async void btnRun_Click(object sender, EventArgs e)
         {
             string originalCommand = txtOriginalCommand.Text.Trim();
-            string folder          = cboFolder.Text.Trim();
-            string fileName        = txtFileName.Text.Trim();
+            string folder = cboFolder.Text.Trim();
+            string fileName = txtFileName.Text.Trim();
 
             if (string.IsNullOrEmpty(originalCommand) || string.IsNullOrEmpty(folder))
             {
@@ -224,7 +238,7 @@ namespace FFmpegAssistant
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    fileName         = Path.GetFileName(lastArg.Value.Trim().Trim('"'));
+                    fileName = Path.GetFileName(lastArg.Value.Trim().Trim('"'));
                     txtFileName.Text = fileName;
                 }
 
@@ -238,7 +252,7 @@ namespace FFmpegAssistant
             Directory.CreateDirectory(folder);
 
             string outputPath = Path.Combine(folder, fileName);
-            string command    = ReplaceOutputFile(originalCommand, outputPath);
+            string command = ReplaceOutputFile(originalCommand, outputPath);
 
             if (File.Exists(outputPath))
             {
@@ -261,11 +275,11 @@ namespace FFmpegAssistant
             string arguments = command[(command.IndexOf(' ') + 1)..];
 
             ResetProgress();
-            _cts                   = new CancellationTokenSource();
-            _lastLogFile           = logFile;
-            btnRun.Enabled         = false;
-            btnCancel.Enabled      = true;
-            btnOpenFile.Enabled    = false;
+            _cts = new CancellationTokenSource();
+            _lastLogFile = logFile;
+            btnRun.Enabled = false;
+            btnCancel.Enabled = true;
+            btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
 
             try
@@ -277,7 +291,7 @@ namespace FFmpegAssistant
 
                 var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
 
-                _lastOutputPath     = outputPath;
+                _lastOutputPath = outputPath;
                 btnOpenFile.Enabled = File.Exists(outputPath);
 
                 if (exitCode != 0)
@@ -328,8 +342,8 @@ namespace FFmpegAssistant
             finally
             {
                 _cts.Dispose();
-                _cts              = null;
-                btnRun.Enabled    = true;
+                _cts = null;
+                btnRun.Enabled = true;
                 btnCancel.Enabled = false;
             }
         }
@@ -340,7 +354,7 @@ namespace FFmpegAssistant
             btnCancel.Enabled = false;
         }
 
-        private void btnOpenFile_Click(object sender, EventArgs e)
+        private void btnOpenFile_Click_1(object sender, EventArgs e)
         {
             if (_lastOutputPath == null || !File.Exists(_lastOutputPath))
             {
@@ -350,12 +364,45 @@ namespace FFmpegAssistant
             Process.Start(new ProcessStartInfo(_lastOutputPath) { UseShellExecute = true });
         }
 
-        private void btnOpenFolder_Click(object sender, EventArgs e)
+        private void btnClear_Click(object sender, EventArgs e)
         {
-            if (_lastOutputPath != null && File.Exists(_lastOutputPath))
-                Process.Start("explorer.exe", $"/select,\"{_lastOutputPath}\"");
-            else
-                Process.Start("explorer.exe", $"\"{cboFolder.Text}\"");
+            txtOriginalCommand.Clear();
+            cboFolder.SelectedIndex = 0;
+            txtFileName.Clear();
+
+            ResetProgress();
+
+            _lastOutputPath        = null;
+            _lastLogFile           = null;
+            btnOpenFile.Enabled    = false;
+            btnOpenLogFile.Enabled = false;
+        }
+
+        private void btnOpenFolder_Click_1(object sender, EventArgs e)
+        {
+            string folder = cboFolder.Text.Trim();
+            string fileName = txtFileName.Text.Trim();
+
+            // If we can build a path from the current UI fields and the file already exists,
+            // open Explorer with the file pre-selected — works during and after a download
+            if (!string.IsNullOrEmpty(folder) && !string.IsNullOrEmpty(fileName))
+            {
+                string candidate = Path.Combine(folder, fileName);
+                if (File.Exists(candidate))
+                {
+                    Process.Start("explorer.exe", $"/select,\"{candidate}\"");
+                    return;
+                }
+            }
+
+            // File doesn't exist yet — just open the folder
+            Process.Start("explorer.exe", $"\"{folder}\"");
+        }
+
+        private void menuAbout_Click(object sender, EventArgs e)
+        {
+            using var about = new AboutForm();
+            about.ShowDialog(this);
         }
 
         private void btnOpenLogFile_Click(object sender, EventArgs e)
@@ -388,16 +435,16 @@ namespace FFmpegAssistant
             var psi = new ProcessStartInfo("ffmpeg", arguments)
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                RedirectStandardInput  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
-            using var process  = new Process { StartInfo = psi };
+            using var process = new Process { StartInfo = psi };
             await using var writer = new StreamWriter(logFile, append: false, System.Text.Encoding.UTF8) { AutoFlush = true };
-            var writerLock  = new object();
-            var errorLines  = new List<string>();
+            var writerLock = new object();
+            var errorLines = new List<string>();
 
             void HandleLine(string? line)
             {
@@ -412,7 +459,7 @@ namespace FFmpegAssistant
             }
 
             process.OutputDataReceived += (_, e) => HandleLine(e.Data);
-            process.ErrorDataReceived  += (_, e) => HandleLine(e.Data);
+            process.ErrorDataReceived += (_, e) => HandleLine(e.Data);
 
             process.Start();
             process.StandardInput.Close();
@@ -446,9 +493,9 @@ namespace FFmpegAssistant
                 $"-v error -show_entries format=duration -of csv=p=0 \"{filePath}\"")
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
             try
@@ -492,8 +539,8 @@ namespace FFmpegAssistant
                 // Trim to the most recent half when the file gets too large
                 if (File.Exists(AppLogFile) && new FileInfo(AppLogFile).Length > MaxLogBytes)
                 {
-                    string[] lines  = File.ReadAllLines(AppLogFile, System.Text.Encoding.UTF8);
-                    string[] kept   = lines[(lines.Length / 2)..];
+                    string[] lines = File.ReadAllLines(AppLogFile, System.Text.Encoding.UTF8);
+                    string[] kept = lines[(lines.Length / 2)..];
                     File.WriteAllLines(AppLogFile, kept, System.Text.Encoding.UTF8);
                 }
 
@@ -549,15 +596,20 @@ namespace FFmpegAssistant
             if (matches.Count == 0)
                 return;
 
-            var last      = matches.Last();
-            string showName   = last.Groups[1].Value;
-            int season        = int.Parse(last.Groups[2].Value);
-            int episode       = int.Parse(last.Groups[3].Value) + 1;
-            string ext        = last.Groups[4].Value;
-            string seasonStr  = season.ToString().PadLeft(last.Groups[2].Length, '0');
+            var last = matches.Last();
+            string showName = last.Groups[1].Value;
+            int season = int.Parse(last.Groups[2].Value);
+            int episode = int.Parse(last.Groups[3].Value) + 1;
+            string ext = last.Groups[4].Value;
+            string seasonStr = season.ToString().PadLeft(last.Groups[2].Length, '0');
             string episodeStr = episode.ToString().PadLeft(last.Groups[3].Length, '0');
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
+        }
+
+        private void btnOpenLogFile_Click_1(object sender, EventArgs e)
+        {
+
         }
     }
 }
