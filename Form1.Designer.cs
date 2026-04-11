@@ -73,7 +73,7 @@ namespace FFmpegAssistant
             cboFolder.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cboFolder.Font = new Font("Segoe UI", 12F);
             cboFolder.FormattingEnabled = true;
-            cboFolder.Location = new Point(12, 275);
+            cboFolder.Location = new Point(12, 264);
             cboFolder.Name = "cboFolder";
             cboFolder.Size = new Size(623, 29);
             cboFolder.TabIndex = 1;
@@ -82,9 +82,9 @@ namespace FFmpegAssistant
             // 
             btnBrowseForFolder.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnBrowseForFolder.Font = new Font("Segoe UI", 12F);
-            btnBrowseForFolder.Location = new Point(652, 271);
+            btnBrowseForFolder.Location = new Point(652, 264);
             btnBrowseForFolder.Name = "btnBrowseForFolder";
-            btnBrowseForFolder.Size = new Size(43, 36);
+            btnBrowseForFolder.Size = new Size(38, 29);
             btnBrowseForFolder.TabIndex = 2;
             btnBrowseForFolder.Text = "...";
             btnBrowseForFolder.UseVisualStyleBackColor = true;
@@ -94,7 +94,7 @@ namespace FFmpegAssistant
             // 
             txtFileName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtFileName.Font = new Font("Segoe UI", 12F);
-            txtFileName.Location = new Point(12, 370);
+            txtFileName.Location = new Point(12, 327);
             txtFileName.Name = "txtFileName";
             txtFileName.Size = new Size(623, 29);
             txtFileName.TabIndex = 3;
@@ -113,7 +113,7 @@ namespace FFmpegAssistant
             // 
             label2.AutoSize = true;
             label2.Font = new Font("Segoe UI", 12F);
-            label2.Location = new Point(12, 251);
+            label2.Location = new Point(12, 240);
             label2.Name = "label2";
             label2.Size = new Size(54, 21);
             label2.TabIndex = 5;
@@ -123,7 +123,7 @@ namespace FFmpegAssistant
             // 
             label3.AutoSize = true;
             label3.Font = new Font("Segoe UI", 12F);
-            label3.Location = new Point(12, 346);
+            label3.Location = new Point(12, 303);
             label3.Name = "label3";
             label3.Size = new Size(80, 21);
             label3.TabIndex = 6;
@@ -132,18 +132,18 @@ namespace FFmpegAssistant
             // btnRun
             // 
             btnRun.Font = new Font("Segoe UI", 12F);
-            btnRun.Location = new Point(12, 420);
+            btnRun.Location = new Point(12, 377);
             btnRun.Name = "btnRun";
             btnRun.Size = new Size(153, 36);
             btnRun.TabIndex = 4;
-            btnRun.Text = "Run";
+            btnRun.Text = "Download";
             btnRun.UseVisualStyleBackColor = true;
             btnRun.Click += btnRun_Click;
             // 
             // btnCancel
             // 
             btnCancel.Font = new Font("Segoe UI", 12F);
-            btnCancel.Location = new Point(187, 420);
+            btnCancel.Location = new Point(187, 377);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(153, 36);
             btnCancel.TabIndex = 5;
@@ -156,14 +156,14 @@ namespace FFmpegAssistant
             dgvProgress.AllowUserToAddRows = false;
             dgvProgress.AllowUserToDeleteRows = false;
             dgvProgress.AllowUserToResizeRows = false;
-            dgvProgress.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            dgvProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             dgvProgress.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvProgress.Location = new Point(12, 475);
+            dgvProgress.Location = new Point(12, 431);
             dgvProgress.Name = "dgvProgress";
             dgvProgress.ReadOnly = true;
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvProgress.Size = new Size(776, 95);
+            dgvProgress.Size = new Size(776, 139);
             dgvProgress.TabIndex = 7;
             dgvProgress.TabStop = false;
             // 
@@ -247,7 +247,7 @@ namespace FFmpegAssistant
             // btnClear
             // 
             btnClear.Font = new Font("Segoe UI", 12F);
-            btnClear.Location = new Point(363, 420);
+            btnClear.Location = new Point(363, 377);
             btnClear.Name = "btnClear";
             btnClear.Size = new Size(153, 36);
             btnClear.TabIndex = 6;

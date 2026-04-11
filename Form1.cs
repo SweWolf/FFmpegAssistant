@@ -25,6 +25,13 @@ namespace FFmpegAssistant
         /// </summary>
         private const EstimationMode SpeedMode = EstimationMode.Stable;
         private const int SpeedSampleCount = 5;
+
+        /// <summary>
+        /// When true, grid values are formatted for readability (normalised elapsed time,
+        /// size converted to MB). When false, raw FFmpeg output is shown as-is.
+        /// Future: expose this in a Settings dialog.
+        /// </summary>
+        private const bool AdjustedFeedback = true;
         private readonly Queue<double> _speedSamples = new();
 
         private static readonly Regex DurationPattern =
@@ -90,6 +97,7 @@ namespace FFmpegAssistant
         private void InitializeProgressGrid()
         {
             dgvProgress.Font = new Font("Segoe UI", 10F);
+            dgvProgress.AllowUserToAddRows = false;
 
             dgvProgress.DefaultCellStyle.SelectionBackColor = dgvProgress.DefaultCellStyle.BackColor;
             dgvProgress.DefaultCellStyle.SelectionForeColor = dgvProgress.DefaultCellStyle.ForeColor;
@@ -122,6 +130,12 @@ namespace FFmpegAssistant
 
             foreach (string label in GridLabels)
                 dgvProgress.Rows.Add(label, "");
+
+            // Shrink the grid to exactly fit its rows — no grey empty space below
+            int exactHeight = dgvProgress.ColumnHeadersHeight
+                            + dgvProgress.Rows.Cast<DataGridViewRow>().Sum(r => r.Height)
+                            + 2; // border
+            dgvProgress.Height = exactHeight;
         }
 
         private void UpdateGridRow(string label, string value)
@@ -235,18 +249,48 @@ namespace FFmpegAssistant
                 SetStatus("Downloading...");
             }
 
+            string displaySize    = AdjustedFeedback ? FormatSize(size) : size;
+            string displayElapsed = AdjustedFeedback && !string.IsNullOrEmpty(elapsed)
+                                    ? FormatElapsed(elapsed) : elapsed;
+
             Invoke(() =>
             {
-                UpdateGridRow("Frame", frame);
-                UpdateGridRow("FPS", fps);
-                UpdateGridRow("Size", size);
-                UpdateGridRow("Time", time);
+                UpdateGridRow("Frame",   frame);
+                UpdateGridRow("FPS",     fps);
+                UpdateGridRow("Size",    displaySize);
+                UpdateGridRow("Time",    time);
                 UpdateGridRow("Bitrate", bitrate);
-                UpdateGridRow("Speed", speed);
-                UpdateGridRow("Elapsed", elapsed);
+                UpdateGridRow("Speed",   speed);
+                UpdateGridRow("Elapsed", displayElapsed);
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
             });
+        }
+
+        /// <summary>Normalises FFmpeg elapsed string (e.g. "0:00:36.63") to HH:mm:ss.</summary>
+        private static string FormatElapsed(string raw)
+        {
+            if (TimeSpan.TryParse(raw, CultureInfo.InvariantCulture, out var ts))
+                return ts.ToString(@"hh\:mm\:ss");
+            return raw;
+        }
+
+        /// <summary>Converts FFmpeg size string (e.g. "73984KiB") to MB with one decimal.</summary>
+        private static string FormatSize(string raw)
+        {
+            var m = Regex.Match(raw, @"^([\d.]+)\s*(KiB|kB|MiB|MB|GiB|GB)$", RegexOptions.IgnoreCase);
+            if (!m.Success) return raw;
+            if (!double.TryParse(m.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out double val))
+                return raw;
+
+            double mb = m.Groups[2].Value.ToUpperInvariant() switch
+            {
+                "KIB" or "KB" => val / 1024.0,
+                "MIB" or "MB" => val,
+                "GIB" or "GB" => val * 1024.0,
+                _              => val / 1024.0
+            };
+            return $"{mb:F1} MB";
         }
 
         private static bool IsErrorLine(string line)
@@ -407,6 +451,7 @@ namespace FFmpegAssistant
             catch (OperationCanceledException)
             {
                 progressBar.Value = 0;
+                lblEstimatedRemaining.Text = "Estimated remaining time: —";
                 WriteAppLog($"RESULT   : CANCELLED by user");
 
                 if (File.Exists(outputPath))
