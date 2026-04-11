@@ -7,8 +7,10 @@ namespace FFmpegAssistant
     {
         public TextProgressBar()
         {
-            // Required so our OnPaint is called instead of the native renderer
-            SetStyle(ControlStyles.UserPaint, true);
+            // UserPaint lets us draw custom content; the other two flags eliminate flickering
+            SetStyle(ControlStyles.UserPaint |
+                     ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
         }
 
         protected override void OnPaint(PaintEventArgs e)
