@@ -28,6 +28,7 @@ namespace FFmpegAssistant
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             txtOriginalCommand = new TextBox();
             cboFolder = new ComboBox();
@@ -45,6 +46,8 @@ namespace FFmpegAssistant
             btnOpenLogFile = new Button();
             lblEstimatedRemaining = new Label();
             menuStrip = new MenuStrip();
+            menuSetup = new ToolStripMenuItem();
+            menuCreateShortcut = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
             menuAbout = new ToolStripMenuItem();
             btnClear = new Button();
@@ -54,6 +57,7 @@ namespace FFmpegAssistant
             label5 = new Label();
             btnTvShow = new Button();
             btnMovie = new Button();
+            toolTip1 = new ToolTip(components);
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -67,6 +71,7 @@ namespace FFmpegAssistant
             txtOriginalCommand.Name = "txtOriginalCommand";
             txtOriginalCommand.Size = new Size(765, 29);
             txtOriginalCommand.TabIndex = 0;
+            toolTip1.SetToolTip(txtOriginalCommand, "Command that FFmpeg should run (the name of the download file will be adjusted)");
             // 
             // cboFolder
             // 
@@ -77,6 +82,7 @@ namespace FFmpegAssistant
             cboFolder.Name = "cboFolder";
             cboFolder.Size = new Size(623, 29);
             cboFolder.TabIndex = 1;
+            toolTip1.SetToolTip(cboFolder, "Download folder");
             // 
             // btnBrowseForFolder
             // 
@@ -87,6 +93,7 @@ namespace FFmpegAssistant
             btnBrowseForFolder.Size = new Size(38, 29);
             btnBrowseForFolder.TabIndex = 2;
             btnBrowseForFolder.Text = "...";
+            toolTip1.SetToolTip(btnBrowseForFolder, "Browse for folder");
             btnBrowseForFolder.UseVisualStyleBackColor = true;
             btnBrowseForFolder.Click += btnBrowseForFolder_Click;
             // 
@@ -98,6 +105,7 @@ namespace FFmpegAssistant
             txtFileName.Name = "txtFileName";
             txtFileName.Size = new Size(623, 29);
             txtFileName.TabIndex = 3;
+            toolTip1.SetToolTip(txtFileName, resources.GetString("txtFileName.ToolTip"));
             // 
             // label1
             // 
@@ -137,6 +145,7 @@ namespace FFmpegAssistant
             btnRun.Size = new Size(153, 36);
             btnRun.TabIndex = 4;
             btnRun.Text = "Download";
+            toolTip1.SetToolTip(btnRun, "FFmpeg runs the command and downloads the video file");
             btnRun.UseVisualStyleBackColor = true;
             btnRun.Click += btnRun_Click;
             // 
@@ -148,6 +157,7 @@ namespace FFmpegAssistant
             btnCancel.Size = new Size(153, 36);
             btnCancel.TabIndex = 5;
             btnCancel.Text = "Cancel";
+            toolTip1.SetToolTip(btnCancel, "Cancel the download in progress");
             btnCancel.UseVisualStyleBackColor = true;
             btnCancel.Click += btnCancel_Click;
             // 
@@ -166,6 +176,7 @@ namespace FFmpegAssistant
             dgvProgress.Size = new Size(776, 139);
             dgvProgress.TabIndex = 7;
             dgvProgress.TabStop = false;
+            toolTip1.SetToolTip(dgvProgress, "Feedback from FFmpeg");
             // 
             // progressBar
             // 
@@ -184,6 +195,7 @@ namespace FFmpegAssistant
             btnOpenFile.Size = new Size(153, 36);
             btnOpenFile.TabIndex = 8;
             btnOpenFile.Text = "Open File";
+            toolTip1.SetToolTip(btnOpenFile, "Open the downloaded video/audio file in the associated application");
             btnOpenFile.UseVisualStyleBackColor = true;
             btnOpenFile.Click += btnOpenFile_Click_1;
             // 
@@ -196,6 +208,7 @@ namespace FFmpegAssistant
             btnOpenFolder.Size = new Size(153, 36);
             btnOpenFolder.TabIndex = 9;
             btnOpenFolder.Text = "Open Folder";
+            toolTip1.SetToolTip(btnOpenFolder, "Open the folder in the Windows File Explorer");
             btnOpenFolder.UseVisualStyleBackColor = true;
             btnOpenFolder.Click += btnOpenFolder_Click_1;
             // 
@@ -208,6 +221,7 @@ namespace FFmpegAssistant
             btnOpenLogFile.Size = new Size(153, 36);
             btnOpenLogFile.TabIndex = 10;
             btnOpenLogFile.Text = "Open Log File";
+            toolTip1.SetToolTip(btnOpenLogFile, "Open FFmpeg's log file");
             btnOpenLogFile.UseVisualStyleBackColor = true;
             btnOpenLogFile.Click += btnOpenLogFile_Click_1;
             // 
@@ -224,14 +238,28 @@ namespace FFmpegAssistant
             // 
             // menuStrip
             // 
-            menuStrip.Items.AddRange(new ToolStripItem[] { menuHelp });
+            menuStrip.Items.AddRange(new ToolStripItem[] { menuSetup, menuHelp });
             menuStrip.Location = new Point(0, 0);
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(800, 24);
             menuStrip.TabIndex = 15;
-            // 
+            //
+            // menuSetup
+            //
+            menuSetup.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut });
+            menuSetup.Name = "menuSetup";
+            menuSetup.Size = new Size(47, 20);
+            menuSetup.Text = "Setup";
+            //
+            // menuCreateShortcut
+            //
+            menuCreateShortcut.Name = "menuCreateShortcut";
+            menuCreateShortcut.Size = new Size(180, 22);
+            menuCreateShortcut.Text = "Create Shortcut...";
+            menuCreateShortcut.Click += menuCreateShortcut_Click;
+            //
             // menuHelp
-            // 
+            //
             menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout });
             menuHelp.Name = "menuHelp";
             menuHelp.Size = new Size(44, 20);
@@ -252,6 +280,7 @@ namespace FFmpegAssistant
             btnClear.Size = new Size(153, 36);
             btnClear.TabIndex = 6;
             btnClear.Text = "Clear";
+            toolTip1.SetToolTip(btnClear, "Clear the boxes on the screen");
             btnClear.UseVisualStyleBackColor = true;
             btnClear.Click += btnClear_Click;
             // 
@@ -305,6 +334,7 @@ namespace FFmpegAssistant
             btnTvShow.Size = new Size(153, 36);
             btnTvShow.TabIndex = 1;
             btnTvShow.Text = "TV Show";
+            toolTip1.SetToolTip(btnTvShow, "Auto suggest folder and file name for a TV show");
             btnTvShow.UseVisualStyleBackColor = true;
             btnTvShow.Click += btnTvShow_Click;
             // 
@@ -315,6 +345,7 @@ namespace FFmpegAssistant
             btnMovie.Size = new Size(153, 36);
             btnMovie.TabIndex = 0;
             btnMovie.Text = "Movie";
+            toolTip1.SetToolTip(btnMovie, "Auto suggest folder and file name for a movie");
             btnMovie.UseVisualStyleBackColor = true;
             btnMovie.Click += btnMovie_Click;
             // 
@@ -374,6 +405,8 @@ namespace FFmpegAssistant
         private Button btnOpenFile;
         private Button btnOpenFolder;
         private MenuStrip menuStrip;
+        private ToolStripMenuItem menuSetup;
+        private ToolStripMenuItem menuCreateShortcut;
         private ToolStripMenuItem menuHelp;
         private ToolStripMenuItem menuAbout;
         private Button btnOpenLogFile;
@@ -385,5 +418,6 @@ namespace FFmpegAssistant
         private Button btnMovie;
         private Label label5;
         private Button btnTvShow;
+        private ToolTip toolTip1;
     }
 }

@@ -558,6 +558,12 @@ namespace FFmpegAssistant
             about.ShowDialog(this);
         }
 
+        private void menuCreateShortcut_Click(object sender, EventArgs e)
+        {
+            using var form = new CreateShortcutForm(Application.ExecutablePath);
+            form.ShowDialog(this);
+        }
+
         private void btnOpenLogFile_Click_1(object sender, EventArgs e)
         {
             if (_lastLogFile == null || !File.Exists(_lastLogFile))

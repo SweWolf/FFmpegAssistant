@@ -2,6 +2,8 @@
 
 A Windows Forms application that helps you run FFmpeg commands by letting you paste an existing command, choose an output folder, and specify a file name — then executes the modified command for you.
 
+![Screenshot](Assets/Screenshot.png)
+
 ## Features
 
 - Detects FFmpeg commands on the clipboard at startup
