@@ -284,7 +284,7 @@ namespace FFmpegAssistant
             groupBox1.Controls.Add(btnMovie);
             groupBox1.Location = new Point(14, 111);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(742, 114);
+            groupBox1.Size = new Size(363, 114);
             groupBox1.TabIndex = 16;
             groupBox1.TabStop = false;
             groupBox1.Text = "Auto suggest folder and file name";
