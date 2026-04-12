@@ -1,6 +1,6 @@
 # FFmpegAssistant
 
-A Windows Forms application that helps you run FFmpeg commands by letting you paste an existing command, choose an output folder, and specify a file name — then executes the modified command for you.
+A Windows Forms application that is an extension to the web browser extension Privatkopiera, that helps you run FFmpeg commands by letting you paste an existing command, choose an output folder, and specify a file name — then executes the modified command for you.
 
 ![Screenshot](Assets/Screenshot.png)
 
@@ -21,6 +21,7 @@ A Windows Forms application that helps you run FFmpeg commands by letting you pa
 - Windows 10 or later
 - .NET 10
 - FFmpeg and ffprobe available on the system PATH
+- The web browser extension Privatkopiera (see https://stefansundin.github.io/privatkopiera/ )
 
 ## License
 
