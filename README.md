@@ -4,6 +4,9 @@ A Windows Forms application that is an extension to the web browser extension Pr
 
 ![Screenshot](Assets/Screenshot.png)
 
+## Instruction Video
+- https://youtu.be/AiEukK-xyYI
+
 ## Features
 
 - Detects FFmpeg commands on the clipboard at startup
