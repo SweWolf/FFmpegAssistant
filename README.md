@@ -2,7 +2,7 @@
 
 A Windows Forms application that is an extension to the web browser extension Privatkopiera, that helps you run FFmpeg commands by letting you paste an existing command, choose an output folder, and specify a file name — then executes the modified command for you.
 
-Basically, this is user interface for the web browser extension Privatkopiera, so this is like a user interface for that addon. Privatkopera can be downloaded from the website https://github.com/stefansundin/privatkopiera
+Basically, this is user interface for the web browser extension Privatkopiera, so this is like a user interface for that addon. Privatkopiera can be downloaded from the website https://github.com/stefansundin/privatkopiera
 
 ![Screenshot](Assets/Screenshot.png)
 
