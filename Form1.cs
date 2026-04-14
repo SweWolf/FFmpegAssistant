@@ -423,6 +423,9 @@ namespace FFmpegAssistant
                     string message = $"FFmpeg exited with an error (code {exitCode}):\n\n{details}";
                     WriteAppLog($"RESULT   : FAILED (exit code {exitCode})");
                     WriteAppLog($"ERROR    : {details.ReplaceLineEndings(" | ")}");
+                    progressBar.Value = 0;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    SetStatus("Download failed — an error occurred.");
                     MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     LogError(fileName, message, logFile);
                 }
@@ -487,6 +490,8 @@ namespace FFmpegAssistant
             catch (Exception ex)
             {
                 string message = $"Unexpected error:\n{ex.Message}";
+                progressBar.Value = 0;
+                lblEstimatedRemaining.Text = "Estimated remaining time: —";
                 SetStatus($"Error: {ex.Message}");
                 WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
                 MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);

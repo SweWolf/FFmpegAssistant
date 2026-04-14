@@ -4,6 +4,8 @@ obj/
 publish/
 publish2/
 publish3/
+publish-multifile/
+publish-standalone/
 
 # Release packages
 *.zip
