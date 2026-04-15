@@ -166,14 +166,13 @@ namespace FFmpegAssistant
             dgvProgress.AllowUserToAddRows = false;
             dgvProgress.AllowUserToDeleteRows = false;
             dgvProgress.AllowUserToResizeRows = false;
-            dgvProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             dgvProgress.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvProgress.Location = new Point(12, 431);
             dgvProgress.Name = "dgvProgress";
             dgvProgress.ReadOnly = true;
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvProgress.Size = new Size(776, 139);
+            dgvProgress.Size = new Size(365, 139);
             dgvProgress.TabIndex = 7;
             dgvProgress.TabStop = false;
             toolTip1.SetToolTip(dgvProgress, "Feedback from FFmpeg");
@@ -243,23 +242,23 @@ namespace FFmpegAssistant
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(800, 24);
             menuStrip.TabIndex = 15;
-            //
+            // 
             // menuSetup
-            //
+            // 
             menuSetup.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut });
             menuSetup.Name = "menuSetup";
-            menuSetup.Size = new Size(47, 20);
+            menuSetup.Size = new Size(49, 20);
             menuSetup.Text = "Setup";
-            //
+            // 
             // menuCreateShortcut
-            //
+            // 
             menuCreateShortcut.Name = "menuCreateShortcut";
-            menuCreateShortcut.Size = new Size(180, 22);
+            menuCreateShortcut.Size = new Size(165, 22);
             menuCreateShortcut.Text = "Create Shortcut...";
             menuCreateShortcut.Click += menuCreateShortcut_Click;
-            //
+            // 
             // menuHelp
-            //
+            // 
             menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout });
             menuHelp.Name = "menuHelp";
             menuHelp.Size = new Size(44, 20);
