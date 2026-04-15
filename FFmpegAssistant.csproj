@@ -10,6 +10,7 @@
     <Title>FFmpeg Assist</Title>
     <Company>SweWolf Software</Company>
     <Authors>Uffe Peter Walderö</Authors>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

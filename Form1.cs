@@ -60,6 +60,9 @@ namespace FFmpegAssistant
         {
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
 
+            // Check for updates in the background — does not block startup
+            _ = CheckForUpdatesAsync();
+
             InitializeProgressGrid();
 
             string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
@@ -393,116 +396,161 @@ namespace FFmpegAssistant
 
             string arguments = command[(command.IndexOf(' ') + 1)..];
 
-            ResetProgress();
-            _cts = new CancellationTokenSource();
-            _lastLogFile = logFile;
-            btnRun.Enabled = false;
-            btnCancel.Enabled = true;
-            btnOpenFile.Enabled = false;
-            btnOpenLogFile.Enabled = false;
-
-            try
+            bool keepTrying = true;
+            while (keepTrying)
             {
-                btnOpenLogFile.Enabled = true;
-                SetStatus("Connecting...");
-                WriteAppLog($"START    : {fileName}");
-                WriteAppLog($"COMMAND  : ffmpeg {arguments}");
-                WriteAppLog($"OUTPUT   : {outputPath}");
+                keepTrying = false;
 
-                var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
+                ResetProgress();
+                _cts = new CancellationTokenSource();
+                _lastLogFile = logFile;
+                btnRun.Enabled = false;
+                btnCancel.Enabled = true;
+                btnOpenFile.Enabled = false;
+                btnOpenLogFile.Enabled = false;
 
-                _lastOutputPath = outputPath;
-                btnOpenFile.Enabled = File.Exists(outputPath);
-
-                if (exitCode != 0)
+                try
                 {
-                    string details = errorLines.Count > 0
-                        ? string.Join("\n", errorLines.TakeLast(6))
-                        : "No specific error details captured. See the log file.";
+                    btnOpenLogFile.Enabled = true;
+                    SetStatus("Connecting...");
+                    WriteAppLog($"START    : {fileName}");
+                    WriteAppLog($"COMMAND  : ffmpeg {arguments}");
+                    WriteAppLog($"OUTPUT   : {outputPath}");
 
-                    string message = $"FFmpeg exited with an error (code {exitCode}):\n\n{details}";
-                    WriteAppLog($"RESULT   : FAILED (exit code {exitCode})");
-                    WriteAppLog($"ERROR    : {details.ReplaceLineEndings(" | ")}");
-                    progressBar.Value = 0;
-                    lblEstimatedRemaining.Text = "Estimated remaining time: —";
-                    SetStatus("Download failed — an error occurred.");
-                    MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    LogError(fileName, message, logFile);
-                }
-                else
-                {
-                    WriteAppLog($"RESULT   : SUCCESS (exit code 0)");
+                    var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
 
-                    bool valid = await ValidateVideoFileAsync(outputPath);
-                    if (!valid)
+                    _lastOutputPath = outputPath;
+                    btnOpenFile.Enabled = File.Exists(outputPath);
+
+                    if (exitCode != 0)
                     {
-                        string message = $"FFmpeg completed but the output file could not be validated as a working video.\n\n{outputPath}\n\nIt may be incomplete or corrupt. Check the log file for clues.";
-                        WriteAppLog($"VALIDATE : FAILED — file may be corrupt or incomplete");
-                        MessageBox.Show(message, "Validation Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        string details = errorLines.Count > 0
+                            ? string.Join("\n", errorLines.TakeLast(6))
+                            : "No specific error details captured. See the log file.";
+
+                        string message = $"FFmpeg exited with an error (code {exitCode}):\n\n{details}";
+                        WriteAppLog($"RESULT   : FAILED (exit code {exitCode})");
+                        WriteAppLog($"ERROR    : {details.ReplaceLineEndings(" | ")}");
+                        progressBar.Value = 0;
+                        lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                        SetStatus("Download failed — an error occurred.");
+                        MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         LogError(fileName, message, logFile);
                     }
                     else
                     {
-                        WriteAppLog($"VALIDATE : OK");
-                        progressBar.Value = 100;
-                        lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
-                        SetStatus("Done");
-                        MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        WriteAppLog($"RESULT   : SUCCESS (exit code 0)");
+                        SetStatus("Validating downloaded file...");
+
+                        bool valid = await ValidateVideoFileAsync(outputPath);
+                        if (valid)
+                        {
+                            WriteAppLog($"VALIDATE : OK");
+                            progressBar.Value = 100;
+                            lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                            SetStatus("Done");
+                            MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            WriteAppLog($"VALIDATE : FAILED — file is corrupted");
+                            progressBar.Value = 0;
+                            lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                            LogError(fileName, "File validation failed — corrupted download", logFile);
+
+                            var deleteAnswer = MessageBox.Show(
+                                $"The downloaded file appears to be corrupted:\n\n{outputPath}\n\nDo you want to delete the file?",
+                                "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                            if (deleteAnswer == DialogResult.Yes)
+                            {
+                                try
+                                {
+                                    File.Delete(outputPath);
+                                    WriteAppLog($"CLEANUP  : Corrupted file deleted by user");
+                                }
+                                catch (Exception ex)
+                                {
+                                    WriteAppLog($"CLEANUP  : Failed to delete corrupted file — {ex.Message}");
+                                }
+
+                                var retryAnswer = MessageBox.Show(
+                                    "Do you want to try to download again?",
+                                    "Retry Download", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                                if (retryAnswer == DialogResult.Yes)
+                                {
+                                    WriteAppLog($"RETRY    : User requested retry");
+                                    keepTrying = true;
+                                }
+                                else
+                                {
+                                    SetStatus("Downloaded file corrupted — file deleted.");
+                                }
+                            }
+                            else
+                            {
+                                SetStatus("Downloaded file corrupted.");
+                            }
+                        }
                     }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                progressBar.Value = 0;
-                lblEstimatedRemaining.Text = "Estimated remaining time: —";
-                WriteAppLog($"RESULT   : CANCELLED by user");
-
-                if (File.Exists(outputPath))
+                catch (OperationCanceledException)
                 {
-                    var answer = MessageBox.Show(
-                        $"Download was cancelled.\n\nA partial file was saved:\n{outputPath}\n\nDelete it?",
-                        "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    progressBar.Value = 0;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    WriteAppLog($"RESULT   : CANCELLED by user");
 
-                    if (answer == DialogResult.Yes)
+                    if (File.Exists(outputPath))
                     {
-                        try
+                        var answer = MessageBox.Show(
+                            $"Download was cancelled.\n\nA partial file was saved:\n{outputPath}\n\nDelete it?",
+                            "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                        if (answer == DialogResult.Yes)
                         {
-                            File.Delete(outputPath);
-                            WriteAppLog($"CLEANUP  : Partial file deleted by user");
-                            SetStatus("Cancelled — partial file deleted.");
+                            try
+                            {
+                                File.Delete(outputPath);
+                                WriteAppLog($"CLEANUP  : Partial file deleted by user");
+                                SetStatus("Cancelled — partial file deleted.");
+                            }
+                            catch (Exception ex)
+                            {
+                                WriteAppLog($"CLEANUP  : Failed to delete partial file — {ex.Message}");
+                                SetStatus("Cancelled — could not delete partial file.");
+                            }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            WriteAppLog($"CLEANUP  : Failed to delete partial file — {ex.Message}");
-                            SetStatus("Cancelled — could not delete partial file.");
+                            SetStatus("Cancelled — partial file kept.");
                         }
                     }
                     else
                     {
-                        SetStatus("Cancelled — partial file kept.");
+                        SetStatus("Cancelled.");
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    SetStatus("Cancelled.");
+                    string message = $"Unexpected error:\n{ex.Message}";
+                    progressBar.Value = 0;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    SetStatus($"Error: {ex.Message}");
+                    WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
+                    MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    LogError(fileName, message, logFile);
                 }
-            }
-            catch (Exception ex)
-            {
-                string message = $"Unexpected error:\n{ex.Message}";
-                progressBar.Value = 0;
-                lblEstimatedRemaining.Text = "Estimated remaining time: —";
-                SetStatus($"Error: {ex.Message}");
-                WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
-                MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                LogError(fileName, message, logFile);
-            }
-            finally
-            {
-                _cts.Dispose();
-                _cts = null;
-                btnRun.Enabled = true;
-                btnCancel.Enabled = false;
+                finally
+                {
+                    _cts.Dispose();
+                    _cts = null;
+                    if (!keepTrying)
+                    {
+                        btnRun.Enabled = true;
+                        btnCancel.Enabled = false;
+                    }
+                }
             }
         }
 
@@ -561,6 +609,28 @@ namespace FFmpegAssistant
         {
             using var about = new AboutForm();
             about.ShowDialog(this);
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            var currentVersion = System.Reflection.Assembly
+                .GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
+
+            var result = await GitHubUpdateChecker.CheckAsync(
+                "SweWolf", "FFmpegAssistant", currentVersion);
+
+            if (result is { IsUpdateAvailable: true })
+            {
+                var answer = MessageBox.Show(
+                    $"A new version is available: {result.LatestVersion}\n\n" +
+                    $"You are running version {currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}.\n\n" +
+                    $"Do you want to go to the download page?",
+                    "Update Available", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+
+                if (answer == DialogResult.Yes)
+                    Process.Start(new ProcessStartInfo(result.ReleasePageUrl)
+                        { UseShellExecute = true });
+            }
         }
 
         private void menuCreateShortcut_Click(object sender, EventArgs e)
@@ -654,35 +724,38 @@ namespace FFmpegAssistant
         // File validation
         // -------------------------------------------------------------------------
 
+        /// <summary>
+        /// Validates a video file by running FFmpeg over it and checking for decode errors.
+        /// Returns true if the file is OK, false if it is corrupted or unreadable.
+        /// </summary>
         private static async Task<bool> ValidateVideoFileAsync(string filePath)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
                 return false;
 
             var psi = new ProcessStartInfo(
-                "ffprobe",
-                $"-v error -show_entries format=duration -of csv=p=0 \"{filePath}\"")
+                "ffmpeg",
+                $"-v error -i \"{filePath}\" -f null -")
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
+                RedirectStandardError  = true,
+                UseShellExecute        = false,
+                CreateNoWindow         = true
             };
 
             try
             {
-                using var probe = new Process { StartInfo = psi };
-                probe.Start();
-                string output = await probe.StandardOutput.ReadToEndAsync();
-                await probe.WaitForExitAsync();
+                using var process = new Process { StartInfo = psi };
+                process.Start();
+                string stderr = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
 
-                return probe.ExitCode == 0
-                    && double.TryParse(output.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out double duration)
-                    && duration > 0;
+                // Any output on stderr means FFmpeg found decode errors
+                return string.IsNullOrWhiteSpace(stderr);
             }
             catch
             {
-                // ffprobe not available — skip validation rather than falsely reporting an error
+                // FFmpeg not available — skip validation rather than falsely reporting an error
                 return true;
             }
         }
@@ -813,10 +886,14 @@ namespace FFmpegAssistant
                         txtFileName.Text = cleanName + ext;
                 }
             }
+
+            btnRun.Focus();
         }
 
         private void btnTvShow_Click(object sender, EventArgs e)
         {
+            cboFolder.SelectedIndex = 2;
+
             string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
 
             // Try to extract the show name from the output filename in the original command
@@ -850,13 +927,11 @@ namespace FFmpegAssistant
                             cboFolder.Items.Add(showFolder);
                         cboFolder.SelectedItem = showFolder;
                         SuggestNextEpisode(showFolder);
-                        return;
                     }
                 }
             }
 
-            // Could not extract a name — fall back to the base TV Shows folder
-            cboFolder.SelectedIndex = 2;
+            btnRun.Focus();
         }
     }
 }
