@@ -11,11 +11,11 @@ Basically, this is user interface for the web browser extension Privatkopiera, s
 
 ## Features
 
-- Detects FFmpeg commands on the clipboard at startup
 - Auto-suggests output folder and file name for Movies and TV Shows
 - Auto-increments episode numbers based on existing files in the folder
 - Real-time progress grid (duration, frame, FPS) with progress bar
 - Estimated remaining time with stable speed sampling
+- Validating downloaded video file
 - Cancel mid-download with optional cleanup of the partial file
 - File-exists protection before overwriting
 - ffprobe validation of the completed file
