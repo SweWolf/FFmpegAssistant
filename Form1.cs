@@ -376,11 +376,15 @@ namespace FFmpegAssistant
 
             string outputPath = Path.Combine(folder, fileName);
 
-            // In watch-while-downloading mode, download to a .ts file first
-            bool watchMode    = chkEnableWatchingWhileDownloading.Checked;
+            // In watch-while-downloading mode, download to a .ts file first.
+            // In normal mode, download to a "(part)" file to protect against power outages —
+            // the file is renamed to the final name only after successful validation.
+            bool watchMode = chkEnableWatchingWhileDownloading.Checked;
+            string partPath = Path.Combine(folder,
+                Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
             string downloadPath = watchMode
                 ? Path.ChangeExtension(outputPath, ".ts")
-                : outputPath;
+                : partPath;
 
             string command = ReplaceOutputFile(originalCommand, downloadPath);
 
@@ -396,14 +400,12 @@ namespace FFmpegAssistant
                     SetStatus("Download cancelled — file already exists.");
                     return;
                 }
-
-                // In normal mode add -y to the download; in watch mode -y goes on the conversion step
-                if (!watchMode)
-                    command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
+                // Normal mode downloads to partPath so no -y needed for the final file.
+                // Watch mode: -y is added to the conversion step instead.
             }
 
-            // If a leftover .ts file exists from a previous interrupted watch-mode run, overwrite it
-            if (watchMode && File.Exists(downloadPath))
+            // If a leftover download file exists from a previous interrupted run, overwrite it
+            if (File.Exists(downloadPath))
                 command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
 
             string logsFolder = Path.Combine(
@@ -488,9 +490,22 @@ namespace FFmpegAssistant
 
                         SetStatus("Validating downloaded file...");
 
-                        bool valid = await ValidateVideoFileAsync(outputPath);
+                        // In normal mode validate the part file; in watch mode validate the final file
+                        string validatePath = watchMode ? outputPath : partPath;
+                        bool valid = await ValidateVideoFileAsync(validatePath);
                         if (valid)
                         {
+                            // In normal mode: rename the (part) file to the final name now that it's verified
+                            if (!watchMode)
+                            {
+                                SetStatus("Finalizing...");
+                                if (File.Exists(outputPath)) File.Delete(outputPath);
+                                File.Move(partPath, outputPath);
+                                _lastOutputPath = outputPath;
+                                btnOpenFile.Enabled = true;
+                                WriteAppLog($"FINALIZE : Renamed (part) file to final name");
+                            }
+
                             WriteAppLog($"VALIDATE : OK");
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
@@ -505,14 +520,14 @@ namespace FFmpegAssistant
                             LogError(fileName, "File validation failed — corrupted download", logFile);
 
                             var deleteAnswer = MessageBox.Show(
-                                $"The downloaded file appears to be corrupted:\n\n{outputPath}\n\nDo you want to delete the file?",
+                                $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
                                 "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                             if (deleteAnswer == DialogResult.Yes)
                             {
                                 try
                                 {
-                                    File.Delete(outputPath);
+                                    File.Delete(validatePath);
                                     WriteAppLog($"CLEANUP  : Corrupted file deleted by user");
                                 }
                                 catch (Exception ex)
@@ -547,17 +562,17 @@ namespace FFmpegAssistant
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     WriteAppLog($"RESULT   : CANCELLED by user");
 
-                    if (File.Exists(outputPath))
+                    if (File.Exists(downloadPath))
                     {
                         var answer = MessageBox.Show(
-                            $"Download was cancelled.\n\nA partial file was saved:\n{outputPath}\n\nDelete it?",
+                            $"Download was cancelled.\n\nA partial file was saved:\n{downloadPath}\n\nDelete it?",
                             "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
                         if (answer == DialogResult.Yes)
                         {
                             try
                             {
-                                File.Delete(outputPath);
+                                File.Delete(downloadPath);
                                 WriteAppLog($"CLEANUP  : Partial file deleted by user");
                                 SetStatus("Cancelled — partial file deleted.");
                             }
