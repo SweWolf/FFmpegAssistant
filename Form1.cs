@@ -267,6 +267,10 @@ namespace FFmpegAssistant
                 UpdateGridRow("Elapsed", displayElapsed);
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
+
+                // Enable Open File as soon as the download file appears on disk (watch mode)
+                if (!btnOpenFile.Enabled && _lastOutputPath != null && File.Exists(_lastOutputPath))
+                    btnOpenFile.Enabled = true;
             });
         }
 
@@ -371,8 +375,16 @@ namespace FFmpegAssistant
             Directory.CreateDirectory(folder);
 
             string outputPath = Path.Combine(folder, fileName);
-            string command = ReplaceOutputFile(originalCommand, outputPath);
 
+            // In watch-while-downloading mode, download to a .ts file first
+            bool watchMode    = chkEnableWatchingWhileDownloading.Checked;
+            string downloadPath = watchMode
+                ? Path.ChangeExtension(outputPath, ".ts")
+                : outputPath;
+
+            string command = ReplaceOutputFile(originalCommand, downloadPath);
+
+            // Overwrite protection — always check the final output file
             if (File.Exists(outputPath))
             {
                 var answer = MessageBox.Show(
@@ -385,8 +397,14 @@ namespace FFmpegAssistant
                     return;
                 }
 
-                command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
+                // In normal mode add -y to the download; in watch mode -y goes on the conversion step
+                if (!watchMode)
+                    command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
             }
+
+            // If a leftover .ts file exists from a previous interrupted watch-mode run, overwrite it
+            if (watchMode && File.Exists(downloadPath))
+                command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
 
             string logsFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -417,10 +435,12 @@ namespace FFmpegAssistant
                     WriteAppLog($"COMMAND  : ffmpeg {arguments}");
                     WriteAppLog($"OUTPUT   : {outputPath}");
 
+                    // Set download path early so Open File can activate as soon as the file appears
+                    _lastOutputPath = downloadPath;
+
                     var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
 
-                    _lastOutputPath = outputPath;
-                    btnOpenFile.Enabled = File.Exists(outputPath);
+                    btnOpenFile.Enabled = File.Exists(downloadPath);
 
                     if (exitCode != 0)
                     {
@@ -440,6 +460,32 @@ namespace FFmpegAssistant
                     else
                     {
                         WriteAppLog($"RESULT   : SUCCESS (exit code 0)");
+
+                        // If watch mode: convert .ts → final format before validating
+                        if (watchMode)
+                        {
+                            string finalExt = Path.GetExtension(outputPath).TrimStart('.');
+                            SetStatus($"Converting to {finalExt}...");
+                            WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");
+
+                            string convArgs = $"-y -i \"{downloadPath}\" -c copy \"{outputPath}\"";
+                            var (convCode, _) = await RunFfmpegAsync(convArgs, logFile, _cts.Token);
+
+                            if (convCode == 0)
+                            {
+                                try { File.Delete(downloadPath); } catch { }
+                                WriteAppLog($"CONVERT  : SUCCESS — .ts file deleted");
+                                _lastOutputPath = outputPath;
+                                btnOpenFile.Enabled = File.Exists(outputPath);
+                            }
+                            else
+                            {
+                                WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
+                                SetStatus("Conversion failed — .ts file kept.");
+                                return;
+                            }
+                        }
+
                         SetStatus("Validating downloaded file...");
 
                         bool valid = await ValidateVideoFileAsync(outputPath);

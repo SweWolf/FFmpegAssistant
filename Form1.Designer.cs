@@ -58,6 +58,7 @@ namespace FFmpegAssistant
             btnTvShow = new Button();
             btnMovie = new Button();
             toolTip1 = new ToolTip(components);
+            chkEnableWatchingWhileDownloading = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -140,10 +141,10 @@ namespace FFmpegAssistant
             // btnRun
             // 
             btnRun.Font = new Font("Segoe UI", 12F);
-            btnRun.Location = new Point(12, 377);
+            btnRun.Location = new Point(14, 428);
             btnRun.Name = "btnRun";
             btnRun.Size = new Size(153, 36);
-            btnRun.TabIndex = 4;
+            btnRun.TabIndex = 5;
             btnRun.Text = "Download";
             toolTip1.SetToolTip(btnRun, "FFmpeg runs the command and downloads the video file");
             btnRun.UseVisualStyleBackColor = true;
@@ -152,10 +153,10 @@ namespace FFmpegAssistant
             // btnCancel
             // 
             btnCancel.Font = new Font("Segoe UI", 12F);
-            btnCancel.Location = new Point(187, 377);
+            btnCancel.Location = new Point(189, 428);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(153, 36);
-            btnCancel.TabIndex = 5;
+            btnCancel.TabIndex = 6;
             btnCancel.Text = "Cancel";
             toolTip1.SetToolTip(btnCancel, "Cancel the download in progress");
             btnCancel.UseVisualStyleBackColor = true;
@@ -167,20 +168,20 @@ namespace FFmpegAssistant
             dgvProgress.AllowUserToDeleteRows = false;
             dgvProgress.AllowUserToResizeRows = false;
             dgvProgress.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvProgress.Location = new Point(12, 431);
+            dgvProgress.Location = new Point(14, 482);
             dgvProgress.Name = "dgvProgress";
             dgvProgress.ReadOnly = true;
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvProgress.Size = new Size(365, 139);
-            dgvProgress.TabIndex = 7;
+            dgvProgress.TabIndex = 8;
             dgvProgress.TabStop = false;
             toolTip1.SetToolTip(dgvProgress, "Feedback from FFmpeg");
             // 
             // progressBar
             // 
             progressBar.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            progressBar.Location = new Point(12, 642);
+            progressBar.Location = new Point(12, 691);
             progressBar.Name = "progressBar";
             progressBar.Size = new Size(776, 23);
             progressBar.TabIndex = 9;
@@ -189,10 +190,10 @@ namespace FFmpegAssistant
             // 
             btnOpenFile.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenFile.Font = new Font("Segoe UI", 12F);
-            btnOpenFile.Location = new Point(12, 677);
+            btnOpenFile.Location = new Point(12, 726);
             btnOpenFile.Name = "btnOpenFile";
             btnOpenFile.Size = new Size(153, 36);
-            btnOpenFile.TabIndex = 8;
+            btnOpenFile.TabIndex = 10;
             btnOpenFile.Text = "Open File";
             toolTip1.SetToolTip(btnOpenFile, "Open the downloaded video/audio file in the associated application");
             btnOpenFile.UseVisualStyleBackColor = true;
@@ -202,10 +203,10 @@ namespace FFmpegAssistant
             // 
             btnOpenFolder.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenFolder.Font = new Font("Segoe UI", 12F);
-            btnOpenFolder.Location = new Point(187, 677);
+            btnOpenFolder.Location = new Point(187, 726);
             btnOpenFolder.Name = "btnOpenFolder";
             btnOpenFolder.Size = new Size(153, 36);
-            btnOpenFolder.TabIndex = 9;
+            btnOpenFolder.TabIndex = 11;
             btnOpenFolder.Text = "Open Folder";
             toolTip1.SetToolTip(btnOpenFolder, "Open the folder in the Windows File Explorer");
             btnOpenFolder.UseVisualStyleBackColor = true;
@@ -215,10 +216,10 @@ namespace FFmpegAssistant
             // 
             btnOpenLogFile.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenLogFile.Font = new Font("Segoe UI", 12F);
-            btnOpenLogFile.Location = new Point(363, 677);
+            btnOpenLogFile.Location = new Point(363, 726);
             btnOpenLogFile.Name = "btnOpenLogFile";
             btnOpenLogFile.Size = new Size(153, 36);
-            btnOpenLogFile.TabIndex = 10;
+            btnOpenLogFile.TabIndex = 12;
             btnOpenLogFile.Text = "Open Log File";
             toolTip1.SetToolTip(btnOpenLogFile, "Open FFmpeg's log file");
             btnOpenLogFile.UseVisualStyleBackColor = true;
@@ -229,7 +230,7 @@ namespace FFmpegAssistant
             lblEstimatedRemaining.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lblEstimatedRemaining.AutoSize = true;
             lblEstimatedRemaining.Font = new Font("Segoe UI", 10F);
-            lblEstimatedRemaining.Location = new Point(12, 623);
+            lblEstimatedRemaining.Location = new Point(12, 672);
             lblEstimatedRemaining.Name = "lblEstimatedRemaining";
             lblEstimatedRemaining.Size = new Size(186, 19);
             lblEstimatedRemaining.TabIndex = 14;
@@ -274,10 +275,10 @@ namespace FFmpegAssistant
             // btnClear
             // 
             btnClear.Font = new Font("Segoe UI", 12F);
-            btnClear.Location = new Point(363, 377);
+            btnClear.Location = new Point(365, 428);
             btnClear.Name = "btnClear";
             btnClear.Size = new Size(153, 36);
-            btnClear.TabIndex = 6;
+            btnClear.TabIndex = 7;
             btnClear.Text = "Clear";
             toolTip1.SetToolTip(btnClear, "Clear the boxes on the screen");
             btnClear.UseVisualStyleBackColor = true;
@@ -288,7 +289,7 @@ namespace FFmpegAssistant
             label4.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             label4.AutoSize = true;
             label4.Font = new Font("Segoe UI", 10F);
-            label4.Location = new Point(12, 592);
+            label4.Location = new Point(12, 641);
             label4.Name = "label4";
             label4.Size = new Size(47, 19);
             label4.TabIndex = 14;
@@ -298,11 +299,11 @@ namespace FFmpegAssistant
             // 
             txtStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             txtStatus.BorderStyle = BorderStyle.FixedSingle;
-            txtStatus.Location = new Point(65, 592);
+            txtStatus.Location = new Point(65, 641);
             txtStatus.Name = "txtStatus";
             txtStatus.ReadOnly = true;
             txtStatus.Size = new Size(723, 23);
-            txtStatus.TabIndex = 8;
+            txtStatus.TabIndex = 9;
             txtStatus.TabStop = false;
             // 
             // groupBox1
@@ -348,12 +349,25 @@ namespace FFmpegAssistant
             btnMovie.UseVisualStyleBackColor = true;
             btnMovie.Click += btnMovie_Click;
             // 
+            // chkEnableWatchingWhileDownloading
+            // 
+            chkEnableWatchingWhileDownloading.AutoSize = true;
+            chkEnableWatchingWhileDownloading.Font = new Font("Segoe UI", 12F);
+            chkEnableWatchingWhileDownloading.Location = new Point(14, 389);
+            chkEnableWatchingWhileDownloading.Name = "chkEnableWatchingWhileDownloading";
+            chkEnableWatchingWhileDownloading.Size = new Size(285, 25);
+            chkEnableWatchingWhileDownloading.TabIndex = 4;
+            chkEnableWatchingWhileDownloading.Text = "Enable Watching While Downloading";
+            toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, "Downloads as a .ts file first so you can watch while downloading, then converts to the final format automatically");
+            chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             AcceptButton = btnRun;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(800, 725);
+            ClientSize = new Size(800, 774);
+            Controls.Add(chkEnableWatchingWhileDownloading);
             Controls.Add(groupBox1);
             Controls.Add(txtStatus);
             Controls.Add(btnClear);
@@ -418,5 +432,6 @@ namespace FFmpegAssistant
         private Label label5;
         private Button btnTvShow;
         private ToolTip toolTip1;
+        private CheckBox chkEnableWatchingWhileDownloading;
     }
 }
