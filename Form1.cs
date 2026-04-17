@@ -58,7 +58,8 @@ namespace FFmpegAssistant
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+            // Icon is set by the Designer via InitializeComponent (Form1.resx).
+            // No override needed here — overriding can lose alpha channel transparency.
 
             // Check for updates in the background — does not block startup
             _ = CheckForUpdatesAsync();
