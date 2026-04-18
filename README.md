@@ -11,7 +11,6 @@ Basically, this is a user interface for the web browser extension Privatkopiera,
 
 ## Features
 
-- Detects FFmpeg commands on the clipboard at startup
 - Auto-suggests output folder and file name for Movies and TV Shows
 - Auto-increments episode numbers based on existing files in the folder
 - Season and Episode boxes let you override the auto-suggested episode number
@@ -19,6 +18,7 @@ Basically, this is a user interface for the web browser extension Privatkopiera,
 - Estimated remaining time with stable speed sampling
 - Watch while downloading — streams to a .ts file so you can open it immediately, then converts to the final format automatically when the download is complete
 - Power outage protection — downloads to a `(part)` file and only renames it to the final name after the file has been validated
+- Validating downloaded video file
 - Cancel mid-download with optional cleanup of the partial file
 - File-exists protection before overwriting
 - FFmpeg validation of the completed file
