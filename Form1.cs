@@ -11,6 +11,7 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private bool _updatingSeasonEpisode;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -53,12 +54,12 @@ namespace FFmpegAssistant
         public Form1()
         {
             InitializeComponent();
-            Load += Form1_Load;
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+            // Icon is set by the Designer via InitializeComponent (Form1.resx).
+            // No override needed here — overriding can lose alpha channel transparency.
 
             // Check for updates in the background — does not block startup
             _ = CheckForUpdatesAsync();
@@ -72,11 +73,30 @@ namespace FFmpegAssistant
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
-            cboFolder.Leave         += (s, _) => SuggestNextEpisode(cboFolder.Text);
+            cboFolder.Leave += (s, _) => SuggestNextEpisode(cboFolder.Text);
 
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
             btnCancel.Enabled = false;
+
+            // Select all text when a text box receives focus — makes it easy to replace the value
+            void SelectAllOnFocus(object? s, EventArgs _) { if (s is TextBox tb) tb.SelectAll(); }
+            txtOriginalCommand.Enter += SelectAllOnFocus;
+            txtFileName.Enter += SelectAllOnFocus;
+            txtSeason.Enter += SelectAllOnFocus;
+            txtEpisode.Enter += SelectAllOnFocus;
+
+            // Season/Episode: accept digits only (keyboard path — blocks the character immediately)
+            void NumericOnly(object? s, KeyPressEventArgs e)
+            {
+                if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+                    e.Handled = true;
+            }
+            txtSeason.KeyPress += NumericOnly;
+            txtEpisode.KeyPress += NumericOnly;
+
+            // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
+            txtEpisode.TextChanged += txtEpisode_TextChanged;
 
             // Clear status when the user starts editing the input fields
             txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
@@ -252,21 +272,25 @@ namespace FFmpegAssistant
                 SetStatus("Downloading...");
             }
 
-            string displaySize    = AdjustedFeedback ? FormatSize(size) : size;
+            string displaySize = AdjustedFeedback ? FormatSize(size) : size;
             string displayElapsed = AdjustedFeedback && !string.IsNullOrEmpty(elapsed)
                                     ? FormatElapsed(elapsed) : elapsed;
 
             Invoke(() =>
             {
-                UpdateGridRow("Frame",   frame);
-                UpdateGridRow("FPS",     fps);
-                UpdateGridRow("Size",    displaySize);
-                UpdateGridRow("Time",    time);
+                UpdateGridRow("Frame", frame);
+                UpdateGridRow("FPS", fps);
+                UpdateGridRow("Size", displaySize);
+                UpdateGridRow("Time", time);
                 UpdateGridRow("Bitrate", bitrate);
-                UpdateGridRow("Speed",   speed);
+                UpdateGridRow("Speed", speed);
                 UpdateGridRow("Elapsed", displayElapsed);
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
+
+                // Enable Open File as soon as the download file appears on disk (watch mode)
+                if (!btnOpenFile.Enabled && _lastOutputPath != null && File.Exists(_lastOutputPath))
+                    btnOpenFile.Enabled = true;
             });
         }
 
@@ -291,7 +315,7 @@ namespace FFmpegAssistant
                 "KIB" or "KB" => val / 1024.0,
                 "MIB" or "MB" => val,
                 "GIB" or "GB" => val * 1024.0,
-                _              => val / 1024.0
+                _ => val / 1024.0
             };
             return $"{mb:F1} MB";
         }
@@ -371,8 +395,20 @@ namespace FFmpegAssistant
             Directory.CreateDirectory(folder);
 
             string outputPath = Path.Combine(folder, fileName);
-            string command = ReplaceOutputFile(originalCommand, outputPath);
 
+            // In watch-while-downloading mode, download to a .ts file first.
+            // In normal mode, download to a "(part)" file to protect against power outages —
+            // the file is renamed to the final name only after successful validation.
+            bool watchMode = chkEnableWatchingWhileDownloading.Checked;
+            string partPath = Path.Combine(folder,
+                Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
+            string downloadPath = watchMode
+                ? Path.ChangeExtension(outputPath, ".ts")
+                : partPath;
+
+            string command = ReplaceOutputFile(originalCommand, downloadPath);
+
+            // Overwrite protection — always check the final output file
             if (File.Exists(outputPath))
             {
                 var answer = MessageBox.Show(
@@ -384,9 +420,13 @@ namespace FFmpegAssistant
                     SetStatus("Download cancelled — file already exists.");
                     return;
                 }
-
-                command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
+                // Normal mode downloads to partPath so no -y needed for the final file.
+                // Watch mode: -y is added to the conversion step instead.
             }
+
+            // If a leftover download file exists from a previous interrupted run, overwrite it
+            if (File.Exists(downloadPath))
+                command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
 
             string logsFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -417,10 +457,12 @@ namespace FFmpegAssistant
                     WriteAppLog($"COMMAND  : ffmpeg {arguments}");
                     WriteAppLog($"OUTPUT   : {outputPath}");
 
+                    // Set download path early so Open File can activate as soon as the file appears
+                    _lastOutputPath = downloadPath;
+
                     var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
 
-                    _lastOutputPath = outputPath;
-                    btnOpenFile.Enabled = File.Exists(outputPath);
+                    btnOpenFile.Enabled = File.Exists(downloadPath);
 
                     if (exitCode != 0)
                     {
@@ -440,11 +482,50 @@ namespace FFmpegAssistant
                     else
                     {
                         WriteAppLog($"RESULT   : SUCCESS (exit code 0)");
+
+                        // If watch mode: convert .ts → final format before validating
+                        if (watchMode)
+                        {
+                            string finalExt = Path.GetExtension(outputPath).TrimStart('.');
+                            SetStatus($"Converting to {finalExt}...");
+                            WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");
+
+                            string convArgs = $"-y -i \"{downloadPath}\" -c copy \"{outputPath}\"";
+                            var (convCode, _) = await RunFfmpegAsync(convArgs, logFile, _cts.Token);
+
+                            if (convCode == 0)
+                            {
+                                try { File.Delete(downloadPath); } catch { }
+                                WriteAppLog($"CONVERT  : SUCCESS — .ts file deleted");
+                                _lastOutputPath = outputPath;
+                                btnOpenFile.Enabled = File.Exists(outputPath);
+                            }
+                            else
+                            {
+                                WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
+                                SetStatus("Conversion failed — .ts file kept.");
+                                return;
+                            }
+                        }
+
                         SetStatus("Validating downloaded file...");
 
-                        bool valid = await ValidateVideoFileAsync(outputPath);
+                        // In normal mode validate the part file; in watch mode validate the final file
+                        string validatePath = watchMode ? outputPath : partPath;
+                        bool valid = await ValidateVideoFileAsync(validatePath);
                         if (valid)
                         {
+                            // In normal mode: rename the (part) file to the final name now that it's verified
+                            if (!watchMode)
+                            {
+                                SetStatus("Finalizing...");
+                                if (File.Exists(outputPath)) File.Delete(outputPath);
+                                File.Move(partPath, outputPath);
+                                _lastOutputPath = outputPath;
+                                btnOpenFile.Enabled = true;
+                                WriteAppLog($"FINALIZE : Renamed (part) file to final name");
+                            }
+
                             WriteAppLog($"VALIDATE : OK");
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
@@ -459,14 +540,14 @@ namespace FFmpegAssistant
                             LogError(fileName, "File validation failed — corrupted download", logFile);
 
                             var deleteAnswer = MessageBox.Show(
-                                $"The downloaded file appears to be corrupted:\n\n{outputPath}\n\nDo you want to delete the file?",
+                                $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
                                 "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                             if (deleteAnswer == DialogResult.Yes)
                             {
                                 try
                                 {
-                                    File.Delete(outputPath);
+                                    File.Delete(validatePath);
                                     WriteAppLog($"CLEANUP  : Corrupted file deleted by user");
                                 }
                                 catch (Exception ex)
@@ -501,17 +582,17 @@ namespace FFmpegAssistant
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     WriteAppLog($"RESULT   : CANCELLED by user");
 
-                    if (File.Exists(outputPath))
+                    if (File.Exists(downloadPath))
                     {
                         var answer = MessageBox.Show(
-                            $"Download was cancelled.\n\nA partial file was saved:\n{outputPath}\n\nDelete it?",
+                            $"Download was cancelled.\n\nA partial file was saved:\n{downloadPath}\n\nDelete it?",
                             "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
                         if (answer == DialogResult.Yes)
                         {
                             try
                             {
-                                File.Delete(outputPath);
+                                File.Delete(downloadPath);
                                 WriteAppLog($"CLEANUP  : Partial file deleted by user");
                                 SetStatus("Cancelled — partial file deleted.");
                             }
@@ -582,6 +663,13 @@ namespace FFmpegAssistant
             _lastLogFile = null;
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
+
+            lblSeason.Visible = false;
+            txtSeason.Visible = false;
+            lblEpisode.Visible = false;
+            txtEpisode.Visible = false;
+            txtSeason.Text = "";
+            txtEpisode.Text = "";
         }
 
         private void btnOpenFolder_Click_1(object sender, EventArgs e)
@@ -629,7 +717,7 @@ namespace FFmpegAssistant
 
                 if (answer == DialogResult.Yes)
                     Process.Start(new ProcessStartInfo(result.ReleasePageUrl)
-                        { UseShellExecute = true });
+                    { UseShellExecute = true });
             }
         }
 
@@ -738,9 +826,9 @@ namespace FFmpegAssistant
                 $"-v error -i \"{filePath}\" -f null -")
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
             try
@@ -849,6 +937,13 @@ namespace FFmpegAssistant
             string episodeStr = episode.ToString().PadLeft(last.Groups[3].Length, '0');
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
+
+            // Pre-fill the Season/Episode boxes to match the suggestion so the
+            // user can see — and immediately override — the suggested values.
+            _updatingSeasonEpisode = true;
+            txtSeason.Text  = season.ToString();
+            txtEpisode.Text = episode.ToString();
+            _updatingSeasonEpisode = false;
         }
 
         private void btnMovie_Click(object sender, EventArgs e)
@@ -862,20 +957,20 @@ namespace FFmpegAssistant
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    string raw      = lastArg.Value.Trim().Trim('"');
-                    string ext      = Path.GetExtension(raw);
+                    string raw = lastArg.Value.Trim().Trim('"');
+                    string ext = Path.GetExtension(raw);
                     string nameOnly = Path.GetFileNameWithoutExtension(raw);
 
                     // Find the earliest delimiter: '-' or '['
-                    int dashIndex    = nameOnly.IndexOf('-');
+                    int dashIndex = nameOnly.IndexOf('-');
                     int bracketIndex = nameOnly.IndexOf('[');
 
                     int delimIndex = (dashIndex, bracketIndex) switch
                     {
-                        ( >= 0,  >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0,    _)  => dashIndex,
-                        (_,      >= 0) => bracketIndex,
-                        _              => -1   // no delimiter — use full name
+                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
+                        ( >= 0, _) => dashIndex,
+                        (_, >= 0) => bracketIndex,
+                        _ => -1   // no delimiter — use full name
                     };
 
                     string cleanName = delimIndex > 0
@@ -887,7 +982,67 @@ namespace FFmpegAssistant
                 }
             }
 
+            lblSeason.Visible = false;
+            txtSeason.Visible = false;
+            lblEpisode.Visible = false;
+            txtEpisode.Visible = false;
+            txtSeason.Text = "";
+            txtEpisode.Text = "";
+
             btnRun.Focus();
+        }
+
+        private void txtSeason_TextChanged(object sender, EventArgs e)
+        {
+            if (_updatingSeasonEpisode) return;
+            StripNonDigits(txtSeason);
+            if (txtSeason.Text.Length > 0 && txtEpisode.Text.Length == 0)
+                txtEpisode.Text = "1";
+            UpdateFileNameFromSeasonEpisode();
+        }
+
+        private void txtEpisode_TextChanged(object sender, EventArgs e)
+        {
+            if (_updatingSeasonEpisode) return;
+            StripNonDigits(txtEpisode);
+            if (txtEpisode.Text.Length > 0 && txtSeason.Text.Length == 0)
+                txtSeason.Text = "1";
+            UpdateFileNameFromSeasonEpisode();
+        }
+
+        /// <summary>
+        /// Removes any non-digit characters from a TextBox, preserving the caret position.
+        /// Handles text pasted from the clipboard that may contain non-numeric characters.
+        /// </summary>
+        private static void StripNonDigits(TextBox tb)
+        {
+            string digits = new string(tb.Text.Where(char.IsDigit).ToArray());
+            if (digits == tb.Text) return;                       // nothing to strip
+            int caret = Math.Max(0, tb.SelectionStart - (tb.Text.Length - digits.Length));
+            tb.Text = digits;                                    // triggers TextChanged again,
+            tb.SelectionStart = Math.Min(caret, digits.Length); // but digits==tb.Text so it exits immediately
+        }
+
+        /// <summary>
+        /// Rebuilds the filename using the current Season and Episode box values,
+        /// overriding whatever the folder scan suggested. Does nothing if the
+        /// current filename does not match the TV-show naming pattern, or if
+        /// either box is empty / contains a non-positive number.
+        /// </summary>
+        private void UpdateFileNameFromSeasonEpisode()
+        {
+            var m = EpisodePattern.Match(txtFileName.Text);
+            if (!m.Success) return;
+
+            if (!int.TryParse(txtSeason.Text, out int season) || season < 1) return;
+            if (!int.TryParse(txtEpisode.Text, out int episode) || episode < 1) return;
+
+            string showName = m.Groups[1].Value;
+            string ext = m.Groups[4].Value;
+            string seasonStr = season.ToString().PadLeft(m.Groups[2].Length, '0');
+            string episodeStr = episode.ToString().PadLeft(m.Groups[3].Length, '0');
+
+            txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
         }
 
         private void btnTvShow_Click(object sender, EventArgs e)
@@ -905,15 +1060,15 @@ namespace FFmpegAssistant
                 {
                     string outputFile = Path.GetFileNameWithoutExtension(lastArg.Value.Trim().Trim('"'));
                     // Find the earliest delimiter: '-' or '['
-                    int dashIndex    = outputFile.IndexOf('-');
+                    int dashIndex = outputFile.IndexOf('-');
                     int bracketIndex = outputFile.IndexOf('[');
 
                     int delimIndex = (dashIndex, bracketIndex) switch
                     {
-                        ( >= 0,  >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0,    _)  => dashIndex,
-                        (_,      >= 0) => bracketIndex,
-                        _              => -1   // no delimiter — use full name
+                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
+                        ( >= 0, _) => dashIndex,
+                        (_, >= 0) => bracketIndex,
+                        _ => -1   // no delimiter — use full name
                     };
 
                     string showName = delimIndex > 0
@@ -930,6 +1085,11 @@ namespace FFmpegAssistant
                     }
                 }
             }
+
+            lblSeason.Visible = true;
+            txtSeason.Visible = true;
+            lblEpisode.Visible = true;
+            txtEpisode.Visible = true;
 
             btnRun.Focus();
         }
