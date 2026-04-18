@@ -342,6 +342,7 @@ namespace FFmpegAssistant
             txtEpisode.Name = "txtEpisode";
             txtEpisode.Size = new Size(63, 23);
             txtEpisode.TabIndex = 3;
+            toolTip1.SetToolTip(txtEpisode, "Optional");
             txtEpisode.Visible = false;
             // 
             // lblSeason
@@ -360,6 +361,7 @@ namespace FFmpegAssistant
             txtSeason.Name = "txtSeason";
             txtSeason.Size = new Size(63, 23);
             txtSeason.TabIndex = 2;
+            toolTip1.SetToolTip(txtSeason, "Optional");
             txtSeason.Visible = false;
             txtSeason.TextChanged += txtSeason_TextChanged;
             // 

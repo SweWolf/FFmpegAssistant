@@ -11,6 +11,7 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private bool _updatingSeasonEpisode;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -936,6 +937,13 @@ namespace FFmpegAssistant
             string episodeStr = episode.ToString().PadLeft(last.Groups[3].Length, '0');
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
+
+            // Pre-fill the Season/Episode boxes to match the suggestion so the
+            // user can see — and immediately override — the suggested values.
+            _updatingSeasonEpisode = true;
+            txtSeason.Text  = season.ToString();
+            txtEpisode.Text = episode.ToString();
+            _updatingSeasonEpisode = false;
         }
 
         private void btnMovie_Click(object sender, EventArgs e)
@@ -986,6 +994,7 @@ namespace FFmpegAssistant
 
         private void txtSeason_TextChanged(object sender, EventArgs e)
         {
+            if (_updatingSeasonEpisode) return;
             StripNonDigits(txtSeason);
             if (txtSeason.Text.Length > 0 && txtEpisode.Text.Length == 0)
                 txtEpisode.Text = "1";
@@ -994,6 +1003,7 @@ namespace FFmpegAssistant
 
         private void txtEpisode_TextChanged(object sender, EventArgs e)
         {
+            if (_updatingSeasonEpisode) return;
             StripNonDigits(txtEpisode);
             if (txtEpisode.Text.Length > 0 && txtSeason.Text.Length == 0)
                 txtSeason.Text = "1";
