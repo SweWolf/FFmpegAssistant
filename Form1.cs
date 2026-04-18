@@ -53,7 +53,6 @@ namespace FFmpegAssistant
         public Form1()
         {
             InitializeComponent();
-            Load += Form1_Load;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -73,11 +72,30 @@ namespace FFmpegAssistant
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
-            cboFolder.Leave         += (s, _) => SuggestNextEpisode(cboFolder.Text);
+            cboFolder.Leave += (s, _) => SuggestNextEpisode(cboFolder.Text);
 
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
             btnCancel.Enabled = false;
+
+            // Select all text when a text box receives focus — makes it easy to replace the value
+            void SelectAllOnFocus(object? s, EventArgs _) { if (s is TextBox tb) tb.SelectAll(); }
+            txtOriginalCommand.Enter += SelectAllOnFocus;
+            txtFileName.Enter += SelectAllOnFocus;
+            txtSeason.Enter += SelectAllOnFocus;
+            txtEpisode.Enter += SelectAllOnFocus;
+
+            // Season/Episode: accept digits only (keyboard path — blocks the character immediately)
+            void NumericOnly(object? s, KeyPressEventArgs e)
+            {
+                if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
+                    e.Handled = true;
+            }
+            txtSeason.KeyPress += NumericOnly;
+            txtEpisode.KeyPress += NumericOnly;
+
+            // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
+            txtEpisode.TextChanged += txtEpisode_TextChanged;
 
             // Clear status when the user starts editing the input fields
             txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
@@ -253,18 +271,18 @@ namespace FFmpegAssistant
                 SetStatus("Downloading...");
             }
 
-            string displaySize    = AdjustedFeedback ? FormatSize(size) : size;
+            string displaySize = AdjustedFeedback ? FormatSize(size) : size;
             string displayElapsed = AdjustedFeedback && !string.IsNullOrEmpty(elapsed)
                                     ? FormatElapsed(elapsed) : elapsed;
 
             Invoke(() =>
             {
-                UpdateGridRow("Frame",   frame);
-                UpdateGridRow("FPS",     fps);
-                UpdateGridRow("Size",    displaySize);
-                UpdateGridRow("Time",    time);
+                UpdateGridRow("Frame", frame);
+                UpdateGridRow("FPS", fps);
+                UpdateGridRow("Size", displaySize);
+                UpdateGridRow("Time", time);
                 UpdateGridRow("Bitrate", bitrate);
-                UpdateGridRow("Speed",   speed);
+                UpdateGridRow("Speed", speed);
                 UpdateGridRow("Elapsed", displayElapsed);
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
@@ -296,7 +314,7 @@ namespace FFmpegAssistant
                 "KIB" or "KB" => val / 1024.0,
                 "MIB" or "MB" => val,
                 "GIB" or "GB" => val * 1024.0,
-                _              => val / 1024.0
+                _ => val / 1024.0
             };
             return $"{mb:F1} MB";
         }
@@ -644,6 +662,13 @@ namespace FFmpegAssistant
             _lastLogFile = null;
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
+
+            lblSeason.Visible = false;
+            txtSeason.Visible = false;
+            lblEpisode.Visible = false;
+            txtEpisode.Visible = false;
+            txtSeason.Text = "";
+            txtEpisode.Text = "";
         }
 
         private void btnOpenFolder_Click_1(object sender, EventArgs e)
@@ -691,7 +716,7 @@ namespace FFmpegAssistant
 
                 if (answer == DialogResult.Yes)
                     Process.Start(new ProcessStartInfo(result.ReleasePageUrl)
-                        { UseShellExecute = true });
+                    { UseShellExecute = true });
             }
         }
 
@@ -800,9 +825,9 @@ namespace FFmpegAssistant
                 $"-v error -i \"{filePath}\" -f null -")
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                UseShellExecute        = false,
-                CreateNoWindow         = true
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
 
             try
@@ -924,20 +949,20 @@ namespace FFmpegAssistant
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    string raw      = lastArg.Value.Trim().Trim('"');
-                    string ext      = Path.GetExtension(raw);
+                    string raw = lastArg.Value.Trim().Trim('"');
+                    string ext = Path.GetExtension(raw);
                     string nameOnly = Path.GetFileNameWithoutExtension(raw);
 
                     // Find the earliest delimiter: '-' or '['
-                    int dashIndex    = nameOnly.IndexOf('-');
+                    int dashIndex = nameOnly.IndexOf('-');
                     int bracketIndex = nameOnly.IndexOf('[');
 
                     int delimIndex = (dashIndex, bracketIndex) switch
                     {
-                        ( >= 0,  >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0,    _)  => dashIndex,
-                        (_,      >= 0) => bracketIndex,
-                        _              => -1   // no delimiter — use full name
+                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
+                        ( >= 0, _) => dashIndex,
+                        (_, >= 0) => bracketIndex,
+                        _ => -1   // no delimiter — use full name
                     };
 
                     string cleanName = delimIndex > 0
@@ -949,7 +974,65 @@ namespace FFmpegAssistant
                 }
             }
 
+            lblSeason.Visible = false;
+            txtSeason.Visible = false;
+            lblEpisode.Visible = false;
+            txtEpisode.Visible = false;
+            txtSeason.Text = "";
+            txtEpisode.Text = "";
+
             btnRun.Focus();
+        }
+
+        private void txtSeason_TextChanged(object sender, EventArgs e)
+        {
+            StripNonDigits(txtSeason);
+            if (txtSeason.Text.Length > 0 && txtEpisode.Text.Length == 0)
+                txtEpisode.Text = "1";
+            UpdateFileNameFromSeasonEpisode();
+        }
+
+        private void txtEpisode_TextChanged(object sender, EventArgs e)
+        {
+            StripNonDigits(txtEpisode);
+            if (txtEpisode.Text.Length > 0 && txtSeason.Text.Length == 0)
+                txtSeason.Text = "1";
+            UpdateFileNameFromSeasonEpisode();
+        }
+
+        /// <summary>
+        /// Removes any non-digit characters from a TextBox, preserving the caret position.
+        /// Handles text pasted from the clipboard that may contain non-numeric characters.
+        /// </summary>
+        private static void StripNonDigits(TextBox tb)
+        {
+            string digits = new string(tb.Text.Where(char.IsDigit).ToArray());
+            if (digits == tb.Text) return;                       // nothing to strip
+            int caret = Math.Max(0, tb.SelectionStart - (tb.Text.Length - digits.Length));
+            tb.Text = digits;                                    // triggers TextChanged again,
+            tb.SelectionStart = Math.Min(caret, digits.Length); // but digits==tb.Text so it exits immediately
+        }
+
+        /// <summary>
+        /// Rebuilds the filename using the current Season and Episode box values,
+        /// overriding whatever the folder scan suggested. Does nothing if the
+        /// current filename does not match the TV-show naming pattern, or if
+        /// either box is empty / contains a non-positive number.
+        /// </summary>
+        private void UpdateFileNameFromSeasonEpisode()
+        {
+            var m = EpisodePattern.Match(txtFileName.Text);
+            if (!m.Success) return;
+
+            if (!int.TryParse(txtSeason.Text, out int season) || season < 1) return;
+            if (!int.TryParse(txtEpisode.Text, out int episode) || episode < 1) return;
+
+            string showName = m.Groups[1].Value;
+            string ext = m.Groups[4].Value;
+            string seasonStr = season.ToString().PadLeft(m.Groups[2].Length, '0');
+            string episodeStr = episode.ToString().PadLeft(m.Groups[3].Length, '0');
+
+            txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
         }
 
         private void btnTvShow_Click(object sender, EventArgs e)
@@ -967,15 +1050,15 @@ namespace FFmpegAssistant
                 {
                     string outputFile = Path.GetFileNameWithoutExtension(lastArg.Value.Trim().Trim('"'));
                     // Find the earliest delimiter: '-' or '['
-                    int dashIndex    = outputFile.IndexOf('-');
+                    int dashIndex = outputFile.IndexOf('-');
                     int bracketIndex = outputFile.IndexOf('[');
 
                     int delimIndex = (dashIndex, bracketIndex) switch
                     {
-                        ( >= 0,  >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0,    _)  => dashIndex,
-                        (_,      >= 0) => bracketIndex,
-                        _              => -1   // no delimiter — use full name
+                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
+                        ( >= 0, _) => dashIndex,
+                        (_, >= 0) => bracketIndex,
+                        _ => -1   // no delimiter — use full name
                     };
 
                     string showName = delimIndex > 0
@@ -992,6 +1075,11 @@ namespace FFmpegAssistant
                     }
                 }
             }
+
+            lblSeason.Visible = true;
+            txtSeason.Visible = true;
+            lblEpisode.Visible = true;
+            txtEpisode.Visible = true;
 
             btnRun.Focus();
         }
