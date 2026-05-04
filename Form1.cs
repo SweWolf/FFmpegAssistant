@@ -183,6 +183,7 @@ namespace FFmpegAssistant
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
             txtStatus.Clear();
+            TaskbarProgress.Clear(this);
         }
 
         private void SetStatus(string message)
@@ -287,6 +288,7 @@ namespace FFmpegAssistant
                 UpdateGridRow("Elapsed", displayElapsed);
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
+                TaskbarProgress.SetNormal(this, percent, 100);
 
                 // Enable Open File as soon as the download file appears on disk (watch mode)
                 if (!btnOpenFile.Enabled && _lastOutputPath != null && File.Exists(_lastOutputPath))
@@ -475,6 +477,7 @@ namespace FFmpegAssistant
                         WriteAppLog($"ERROR    : {details.ReplaceLineEndings(" | ")}");
                         progressBar.Value = 0;
                         lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                        TaskbarProgress.SetError(this, 100, 100);
                         SetStatus("Download failed — an error occurred.");
                         MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         LogError(fileName, message, logFile);
@@ -488,6 +491,7 @@ namespace FFmpegAssistant
                         {
                             string finalExt = Path.GetExtension(outputPath).TrimStart('.');
                             SetStatus($"Converting to {finalExt}...");
+                            TaskbarProgress.SetIndeterminate(this);
                             WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");
 
                             string convArgs = $"-y -i \"{downloadPath}\" -c copy \"{outputPath}\"";
@@ -529,6 +533,7 @@ namespace FFmpegAssistant
                             WriteAppLog($"VALIDATE : OK");
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                            TaskbarProgress.Clear(this);
                             SetStatus("Done");
                             MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
@@ -580,6 +585,7 @@ namespace FFmpegAssistant
                 {
                     progressBar.Value = 0;
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    TaskbarProgress.Clear(this);
                     WriteAppLog($"RESULT   : CANCELLED by user");
 
                     if (File.Exists(downloadPath))
@@ -617,6 +623,7 @@ namespace FFmpegAssistant
                     string message = $"Unexpected error:\n{ex.Message}";
                     progressBar.Value = 0;
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    TaskbarProgress.SetError(this, 100, 100);
                     SetStatus($"Error: {ex.Message}");
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
                     MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
