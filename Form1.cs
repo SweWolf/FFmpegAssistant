@@ -12,6 +12,7 @@ namespace FFmpegAssistant
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
         private bool _updatingSeasonEpisode;
+        private bool _closeAfterCancel;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -98,6 +99,16 @@ namespace FFmpegAssistant
             // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
             txtEpisode.TextChanged += txtEpisode_TextChanged;
 
+            // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted
+            txtOriginalCommand.TextChanged += (s, _) =>
+            {
+                string cmd = txtOriginalCommand.Text.Trim();
+                if (cmd.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase) && cmd.Length > 30)
+                    TryApplyTvShowHistory(cmd);
+            };
+            // Also trigger when the box loses focus (catches manual edits)
+            txtOriginalCommand.Leave += (s, _) => TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
+
             // Clear status when the user starts editing the input fields
             txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
             txtFileName.TextChanged += (s, _) => txtStatus.Clear();
@@ -106,7 +117,11 @@ namespace FFmpegAssistant
             {
                 string text = Clipboard.GetText().Trim();
                 if (text.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                {
                     txtOriginalCommand.Text = text;
+                    // Defer until after the form is fully shown so the ComboBox updates correctly
+                    BeginInvoke(() => TryApplyTvShowHistory(text));
+                }
             }
         }
 
@@ -396,6 +411,18 @@ namespace FFmpegAssistant
 
             Directory.CreateDirectory(folder);
 
+            // Save TV show history so the folder is auto-suggested next time
+            const string tvShowsMarker = @"\TV Shows\";
+            int tvIdx = folder.IndexOf(tvShowsMarker, StringComparison.OrdinalIgnoreCase);
+            if (tvIdx >= 0)
+            {
+                string afterMarker = folder[(tvIdx + tvShowsMarker.Length)..];
+                string subfolder   = afterMarker.Split('\\', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                string? showName   = ExtractShowName(originalCommand);
+                if (!string.IsNullOrEmpty(subfolder) && showName != null)
+                    TvShowHistory.SaveOrUpdate(showName, subfolder);
+            }
+
             string outputPath = Path.Combine(folder, fileName);
 
             // In watch-while-downloading mode, download to a .ts file first.
@@ -535,7 +562,9 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done");
-                            MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            // Skip the popup if the user already asked to close the application
+                            if (!_closeAfterCancel)
+                                MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                         else
                         {
@@ -588,34 +617,53 @@ namespace FFmpegAssistant
                     TaskbarProgress.Clear(this);
                     WriteAppLog($"RESULT   : CANCELLED by user");
 
-                    if (File.Exists(downloadPath))
+                    if (_closeAfterCancel)
                     {
-                        var answer = MessageBox.Show(
-                            $"Download was cancelled.\n\nA partial file was saved:\n{downloadPath}\n\nDelete it?",
-                            "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-                        if (answer == DialogResult.Yes)
+                        // Application is closing — silently delete the partial file, no prompts
+                        if (File.Exists(downloadPath))
                         {
                             try
                             {
                                 File.Delete(downloadPath);
-                                WriteAppLog($"CLEANUP  : Partial file deleted by user");
-                                SetStatus("Cancelled — partial file deleted.");
+                                WriteAppLog($"CLEANUP  : Partial file deleted on application close");
                             }
                             catch (Exception ex)
                             {
-                                WriteAppLog($"CLEANUP  : Failed to delete partial file — {ex.Message}");
-                                SetStatus("Cancelled — could not delete partial file.");
+                                WriteAppLog($"CLEANUP  : Failed to delete partial file on close — {ex.Message}");
                             }
-                        }
-                        else
-                        {
-                            SetStatus("Cancelled — partial file kept.");
                         }
                     }
                     else
                     {
-                        SetStatus("Cancelled.");
+                        if (File.Exists(downloadPath))
+                        {
+                            var answer = MessageBox.Show(
+                                $"Download was cancelled.\n\nA partial file was saved:\n{downloadPath}\n\nDelete it?",
+                                "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                            if (answer == DialogResult.Yes)
+                            {
+                                try
+                                {
+                                    File.Delete(downloadPath);
+                                    WriteAppLog($"CLEANUP  : Partial file deleted by user");
+                                    SetStatus("Cancelled — partial file deleted.");
+                                }
+                                catch (Exception ex)
+                                {
+                                    WriteAppLog($"CLEANUP  : Failed to delete partial file — {ex.Message}");
+                                    SetStatus("Cancelled — could not delete partial file.");
+                                }
+                            }
+                            else
+                            {
+                                SetStatus("Cancelled — partial file kept.");
+                            }
+                        }
+                        else
+                        {
+                            SetStatus("Cancelled.");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -637,6 +685,13 @@ namespace FFmpegAssistant
                     {
                         btnRun.Enabled = true;
                         btnCancel.Enabled = false;
+                    }
+
+                    // If the user closed the window during a download, finish closing now
+                    if (_closeAfterCancel && !keepTrying)
+                    {
+                        _closeAfterCancel = false;
+                        Close();
                     }
                 }
             }
@@ -809,6 +864,9 @@ namespace FFmpegAssistant
             catch (OperationCanceledException)
             {
                 process.Kill(entireProcessTree: true);
+                // Wait for the process to fully exit so it releases its file handle
+                // before the caller tries to delete the partial file.
+                try { await process.WaitForExitAsync(); } catch { }
                 throw;
             }
 
@@ -957,33 +1015,15 @@ namespace FFmpegAssistant
         {
             cboFolder.SelectedIndex = 1;
 
-            // Try to extract a clean movie name from the output filename in the original command
             string originalCommand = txtOriginalCommand.Text.Trim();
             if (!string.IsNullOrEmpty(originalCommand))
             {
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    string raw = lastArg.Value.Trim().Trim('"');
-                    string ext = Path.GetExtension(raw);
-                    string nameOnly = Path.GetFileNameWithoutExtension(raw);
-
-                    // Find the earliest delimiter: '-' or '['
-                    int dashIndex = nameOnly.IndexOf('-');
-                    int bracketIndex = nameOnly.IndexOf('[');
-
-                    int delimIndex = (dashIndex, bracketIndex) switch
-                    {
-                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0, _) => dashIndex,
-                        (_, >= 0) => bracketIndex,
-                        _ => -1   // no delimiter — use full name
-                    };
-
-                    string cleanName = delimIndex > 0
-                        ? nameOnly[..delimIndex].Trim()
-                        : nameOnly.Trim();
-
+                    string raw      = lastArg.Value.Trim().Trim('"');
+                    string ext      = Path.GetExtension(raw);
+                    string cleanName = ExtractShowName(originalCommand) ?? Path.GetFileNameWithoutExtension(raw);
                     if (!string.IsNullOrEmpty(cleanName))
                         txtFileName.Text = cleanName + ext;
                 }
@@ -1056,41 +1096,16 @@ namespace FFmpegAssistant
         {
             cboFolder.SelectedIndex = 2;
 
-            string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
-
-            // Try to extract the show name from the output filename in the original command
             string originalCommand = txtOriginalCommand.Text.Trim();
-            if (!string.IsNullOrEmpty(originalCommand))
+            string? showName = ExtractShowName(originalCommand);
+            if (!string.IsNullOrEmpty(showName))
             {
-                var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
-                if (lastArg.Success)
-                {
-                    string outputFile = Path.GetFileNameWithoutExtension(lastArg.Value.Trim().Trim('"'));
-                    // Find the earliest delimiter: '-' or '['
-                    int dashIndex = outputFile.IndexOf('-');
-                    int bracketIndex = outputFile.IndexOf('[');
-
-                    int delimIndex = (dashIndex, bracketIndex) switch
-                    {
-                        ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
-                        ( >= 0, _) => dashIndex,
-                        (_, >= 0) => bracketIndex,
-                        _ => -1   // no delimiter — use full name
-                    };
-
-                    string showName = delimIndex > 0
-                        ? outputFile[..delimIndex].Trim()
-                        : outputFile.Trim();
-
-                    if (!string.IsNullOrEmpty(showName))
-                    {
-                        string showFolder = Path.Combine(baseTvFolder, showName);
-                        if (!cboFolder.Items.Contains(showFolder))
-                            cboFolder.Items.Add(showFolder);
-                        cboFolder.SelectedItem = showFolder;
-                        SuggestNextEpisode(showFolder);
-                    }
-                }
+                string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
+                string showFolder   = Path.Combine(baseTvFolder, showName);
+                if (!cboFolder.Items.Contains(showFolder))
+                    cboFolder.Items.Add(showFolder);
+                cboFolder.SelectedItem = showFolder;
+                SuggestNextEpisode(showFolder);
             }
 
             lblSeason.Visible = true;
@@ -1099,6 +1114,98 @@ namespace FFmpegAssistant
             txtEpisode.Visible = true;
 
             btnRun.Focus();
+        }
+
+        /// <summary>
+        /// Extracts a clean show or movie name from the output filename in an FFmpeg command.
+        /// Strips everything from the first '-' or '[' delimiter onwards.
+        /// Returns null if no name could be extracted.
+        /// </summary>
+        private static string? ExtractShowName(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return null;
+
+            var lastArg = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
+            if (!lastArg.Success) return null;
+
+            string nameOnly = Path.GetFileNameWithoutExtension(lastArg.Value.Trim().Trim('"'));
+            if (string.IsNullOrWhiteSpace(nameOnly)) return null;
+
+            int dashIndex    = nameOnly.IndexOf('-');
+            int bracketIndex = nameOnly.IndexOf('[');
+
+            int delimIndex = (dashIndex, bracketIndex) switch
+            {
+                ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
+                ( >= 0, _)    => dashIndex,
+                (_, >= 0)     => bracketIndex,
+                _             => -1
+            };
+
+            string name = delimIndex > 0 ? nameOnly[..delimIndex].Trim() : nameOnly.Trim();
+            return string.IsNullOrEmpty(name) ? null : name;
+        }
+
+        /// <summary>
+        /// Checks the TV show history for the command's show name.
+        /// If a match is found, automatically sets the folder and triggers TV show mode.
+        /// </summary>
+        // -------------------------------------------------------------------------
+        // Close protection
+        // -------------------------------------------------------------------------
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_cts != null)
+            {
+                var result = MessageBox.Show(
+                    "A download is in progress.\n\n" +
+                    "If you close the application now, the partial file will be deleted.\n\n" +
+                    "Close anyway?",
+                    "Download in Progress",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2); // Cancel is the default
+
+                e.Cancel = true; // Always prevent immediate close — we handle it ourselves
+
+                if (result != DialogResult.OK)
+                    return; // User cancelled — nothing to do
+
+                // User confirmed — cancel the download; the finally block will close the form
+                _closeAfterCancel = true;
+                _cts.Cancel();
+                return;
+            }
+
+            base.OnFormClosing(e);
+        }
+
+        private void TryApplyTvShowHistory(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return;
+
+            string? showName = ExtractShowName(command);
+            //WriteAppLog($"HISTORY  : Extracted show name = '{showName}'");
+            if (showName == null) return;
+
+            var (subfolder, _) = TvShowHistory.LookupFolderWithDiagnostics(showName);
+            //WriteAppLog($"HISTORY  : {diagnostics}");
+            if (subfolder == null) return;
+
+            string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
+            string showFolder   = Path.Combine(baseTvFolder, subfolder);
+
+            if (!cboFolder.Items.Contains(showFolder))
+                cboFolder.Items.Add(showFolder);
+            cboFolder.Text = showFolder;
+
+            lblSeason.Visible = true;
+            txtSeason.Visible = true;
+            lblEpisode.Visible = true;
+            txtEpisode.Visible = true;
+
+            SuggestNextEpisode(showFolder);
         }
     }
 }
