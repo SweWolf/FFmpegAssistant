@@ -46,8 +46,9 @@ namespace FFmpegAssistant
             btnOpenLogFile = new Button();
             lblEstimatedRemaining = new Label();
             menuStrip = new MenuStrip();
-            menuSetup = new ToolStripMenuItem();
+            menuTools = new ToolStripMenuItem();
             menuCreateShortcut = new ToolStripMenuItem();
+            menuSettings = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
             menuAbout = new ToolStripMenuItem();
             btnClear = new Button();
@@ -63,6 +64,8 @@ namespace FFmpegAssistant
             btnMovie = new Button();
             toolTip1 = new ToolTip(components);
             chkEnableWatchingWhileDownloading = new CheckBox();
+            label6 = new Label();
+            txtAttempt = new TextBox();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -242,18 +245,18 @@ namespace FFmpegAssistant
             // 
             // menuStrip
             // 
-            menuStrip.Items.AddRange(new ToolStripItem[] { menuSetup, menuHelp });
+            menuStrip.Items.AddRange(new ToolStripItem[] { menuTools, menuHelp });
             menuStrip.Location = new Point(0, 0);
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(1074, 24);
             menuStrip.TabIndex = 15;
             // 
-            // menuSetup
+            // menuTools
             // 
-            menuSetup.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut });
-            menuSetup.Name = "menuSetup";
-            menuSetup.Size = new Size(49, 20);
-            menuSetup.Text = "Setup";
+            menuTools.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut, menuSettings });
+            menuTools.Name = "menuTools";
+            menuTools.Size = new Size(47, 20);
+            menuTools.Text = "Tools";
             // 
             // menuCreateShortcut
             // 
@@ -261,6 +264,13 @@ namespace FFmpegAssistant
             menuCreateShortcut.Size = new Size(165, 22);
             menuCreateShortcut.Text = "Create Shortcut...";
             menuCreateShortcut.Click += menuCreateShortcut_Click;
+            // 
+            // menuSettings
+            // 
+            menuSettings.Name = "menuSettings";
+            menuSettings.Size = new Size(165, 22);
+            menuSettings.Text = "Settings...";
+            menuSettings.Click += menuSettings_Click_1;
             // 
             // menuHelp
             // 
@@ -306,7 +316,7 @@ namespace FFmpegAssistant
             txtStatus.Location = new Point(67, 733);
             txtStatus.Name = "txtStatus";
             txtStatus.ReadOnly = true;
-            txtStatus.Size = new Size(997, 23);
+            txtStatus.Size = new Size(824, 23);
             txtStatus.TabIndex = 9;
             txtStatus.TabStop = false;
             // 
@@ -408,12 +418,36 @@ namespace FFmpegAssistant
             toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, "Downloads as a .ts file first so you can watch while downloading, then converts to the final format automatically");
             chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
             // 
+            // label6
+            // 
+            label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            label6.AutoSize = true;
+            label6.Font = new Font("Segoe UI", 10F);
+            label6.Location = new Point(926, 733);
+            label6.Name = "label6";
+            label6.Size = new Size(60, 19);
+            label6.TabIndex = 17;
+            label6.Text = "Attempt";
+            // 
+            // txtAttempt
+            // 
+            txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            txtAttempt.BorderStyle = BorderStyle.FixedSingle;
+            txtAttempt.Location = new Point(992, 733);
+            txtAttempt.Name = "txtAttempt";
+            txtAttempt.ReadOnly = true;
+            txtAttempt.Size = new Size(59, 23);
+            txtAttempt.TabIndex = 18;
+            txtAttempt.TabStop = false;
+            // 
             // Form1
             // 
             AcceptButton = btnRun;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1074, 866);
+            Controls.Add(txtAttempt);
+            Controls.Add(label6);
             Controls.Add(chkEnableWatchingWhileDownloading);
             Controls.Add(groupBox1);
             Controls.Add(txtStatus);
@@ -467,10 +501,11 @@ namespace FFmpegAssistant
         private Button btnOpenFile;
         private Button btnOpenFolder;
         private MenuStrip menuStrip;
-        private ToolStripMenuItem menuSetup;
+        private ToolStripMenuItem menuTools;
         private ToolStripMenuItem menuCreateShortcut;
         private ToolStripMenuItem menuHelp;
         private ToolStripMenuItem menuAbout;
+        private ToolStripMenuItem menuSettings;
         private Button btnOpenLogFile;
         private Label lblEstimatedRemaining;
         private Button btnClear;
@@ -486,5 +521,7 @@ namespace FFmpegAssistant
         private TextBox txtEpisode;
         private Label lblSeason;
         private TextBox txtSeason;
+        private Label label6;
+        private TextBox txtAttempt;
     }
 }

@@ -409,6 +409,38 @@ namespace FFmpegAssistant
                 txtFileName.Text = fileName;
             }
 
+            // Handle "audio_qas" (Swedish voice-over track) according to the user's setting
+            if (originalCommand.Contains("audio_qas", StringComparison.OrdinalIgnoreCase))
+            {
+                string replaceQas = AppSettings.ReplaceAudioQas;
+
+                if (replaceQas == "Yes")
+                {
+                    originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
+                    txtOriginalCommand.Text = originalCommand;
+                }
+                else if (replaceQas == "Ask")
+                {
+                    var answer = MessageBox.Show(
+                        "The command contains the text \"audio_qas\".\n\n" +
+                        "Do you want to replace it with \"audio_eng\"?\n" +
+                        "(Recommended — \"audio_qas\" is most likely a Swedish voice-over.)",
+                        "audio_qas Detected",
+                        MessageBoxButtons.YesNoCancel,
+                        MessageBoxIcon.Question);
+
+                    if (answer == DialogResult.Cancel)
+                        return;
+
+                    if (answer == DialogResult.Yes)
+                    {
+                        originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
+                        txtOriginalCommand.Text = originalCommand;
+                    }
+                }
+                // "No" → skip silently
+            }
+
             Directory.CreateDirectory(folder);
 
             // Save TV show history so the folder is auto-suggested next time
@@ -417,8 +449,8 @@ namespace FFmpegAssistant
             if (tvIdx >= 0)
             {
                 string afterMarker = folder[(tvIdx + tvShowsMarker.Length)..];
-                string subfolder   = afterMarker.Split('\\', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-                string? showName   = ExtractShowName(originalCommand);
+                string subfolder = afterMarker.Split('\\', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+                string? showName = ExtractShowName(originalCommand);
                 if (!string.IsNullOrEmpty(subfolder) && showName != null)
                     TvShowHistory.SaveOrUpdate(showName, subfolder);
             }
@@ -465,10 +497,21 @@ namespace FFmpegAssistant
 
             string arguments = command[(command.IndexOf(' ') + 1)..];
 
+            int maxAttempts = AppSettings.NumberOfDownloadAttempts;
+            int attempt = 0;
+            txtAttempt.Text = "";
+
             bool keepTrying = true;
             while (keepTrying)
             {
                 keepTrying = false;
+                attempt++;
+                txtAttempt.Text = attempt.ToString();
+
+                // On retry, force -y so FFmpeg overwrites any leftover partial file from the previous attempt
+                string currentArguments = attempt > 1 && !arguments.StartsWith("-y ", StringComparison.OrdinalIgnoreCase)
+                    ? "-y " + arguments
+                    : arguments;
 
                 ResetProgress();
                 _cts = new CancellationTokenSource();
@@ -483,13 +526,13 @@ namespace FFmpegAssistant
                     btnOpenLogFile.Enabled = true;
                     SetStatus("Connecting...");
                     WriteAppLog($"START    : {fileName}");
-                    WriteAppLog($"COMMAND  : ffmpeg {arguments}");
+                    WriteAppLog($"COMMAND  : ffmpeg {currentArguments}");
                     WriteAppLog($"OUTPUT   : {outputPath}");
 
                     // Set download path early so Open File can activate as soon as the file appears
                     _lastOutputPath = downloadPath;
 
-                    var (exitCode, errorLines) = await RunFfmpegAsync(arguments, logFile, _cts.Token);
+                    var (exitCode, errorLines) = await RunFfmpegAsync(currentArguments, logFile, _cts.Token);
 
                     btnOpenFile.Enabled = File.Exists(downloadPath);
 
@@ -505,9 +548,20 @@ namespace FFmpegAssistant
                         progressBar.Value = 0;
                         lblEstimatedRemaining.Text = "Estimated remaining time: —";
                         TaskbarProgress.SetError(this, 100, 100);
-                        SetStatus("Download failed — an error occurred.");
-                        MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        LogError(fileName, message, logFile);
+
+                        if (maxAttempts > 1 && attempt < maxAttempts && !_closeAfterCancel)
+                        {
+                            try { if (File.Exists(downloadPath)) File.Delete(downloadPath); } catch { }
+                            WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} after exit code {exitCode}");
+                            SetStatus($"Download failed — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                            keepTrying = true;
+                        }
+                        else
+                        {
+                            SetStatus("Download failed — an error occurred.");
+                            MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            LogError(fileName, message, logFile);
+                        }
                     }
                     else
                     {
@@ -571,41 +625,52 @@ namespace FFmpegAssistant
                             WriteAppLog($"VALIDATE : FAILED — file is corrupted");
                             progressBar.Value = 0;
                             lblEstimatedRemaining.Text = "Estimated remaining time: —";
-                            LogError(fileName, "File validation failed — corrupted download", logFile);
 
-                            var deleteAnswer = MessageBox.Show(
-                                $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
-                                "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-                            if (deleteAnswer == DialogResult.Yes)
+                            if (maxAttempts > 1 && attempt < maxAttempts && !_closeAfterCancel)
                             {
-                                try
-                                {
-                                    File.Delete(validatePath);
-                                    WriteAppLog($"CLEANUP  : Corrupted file deleted by user");
-                                }
-                                catch (Exception ex)
-                                {
-                                    WriteAppLog($"CLEANUP  : Failed to delete corrupted file — {ex.Message}");
-                                }
-
-                                var retryAnswer = MessageBox.Show(
-                                    "Do you want to try to download again?",
-                                    "Retry Download", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-                                if (retryAnswer == DialogResult.Yes)
-                                {
-                                    WriteAppLog($"RETRY    : User requested retry");
-                                    keepTrying = true;
-                                }
-                                else
-                                {
-                                    SetStatus("Downloaded file corrupted — file deleted.");
-                                }
+                                try { if (File.Exists(validatePath)) File.Delete(validatePath); } catch { }
+                                WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} — corrupted file");
+                                SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                                keepTrying = true;
                             }
                             else
                             {
-                                SetStatus("Downloaded file corrupted.");
+                                LogError(fileName, "File validation failed — corrupted download", logFile);
+
+                                var deleteAnswer = MessageBox.Show(
+                                    $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
+                                    "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                                if (deleteAnswer == DialogResult.Yes)
+                                {
+                                    try
+                                    {
+                                        File.Delete(validatePath);
+                                        WriteAppLog($"CLEANUP  : Corrupted file deleted by user");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        WriteAppLog($"CLEANUP  : Failed to delete corrupted file — {ex.Message}");
+                                    }
+
+                                    var retryAnswer = MessageBox.Show(
+                                        "Do you want to try to download again?",
+                                        "Retry Download", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                                    if (retryAnswer == DialogResult.Yes)
+                                    {
+                                        WriteAppLog($"RETRY    : User requested retry");
+                                        keepTrying = true;
+                                    }
+                                    else
+                                    {
+                                        SetStatus("Downloaded file corrupted — file deleted.");
+                                    }
+                                }
+                                else
+                                {
+                                    SetStatus("Downloaded file corrupted.");
+                                }
                             }
                         }
                     }
@@ -664,6 +729,46 @@ namespace FFmpegAssistant
                         {
                             SetStatus("Cancelled.");
                         }
+                    }
+                }
+                catch (System.ComponentModel.Win32Exception win32ex)
+                    when (win32ex.NativeErrorCode == 2 || win32ex.NativeErrorCode == 3)
+                {
+                    // FFmpeg executable not found (NativeErrorCode 2 = file not found, 3 = path not found)
+                    progressBar.Value = 0;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                    TaskbarProgress.SetError(this, 100, 100);
+                    WriteAppLog($"RESULT   : FFMPEG NOT FOUND — {win32ex.Message}");
+
+                    var answer = MessageBox.Show(
+                        "FFmpeg was not found on this system.\n\nWould you like to locate ffmpeg.exe?",
+                        "FFmpeg Not Found", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+                    if (answer == DialogResult.Yes)
+                    {
+                        using var ofd = new OpenFileDialog
+                        {
+                            Title = "Locate ffmpeg.exe",
+                            Filter = "ffmpeg.exe|ffmpeg.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                            FileName = "ffmpeg.exe"
+                        };
+                        if (ofd.ShowDialog(this) == DialogResult.OK)
+                        {
+                            AppSettings.SetFfmpegExe(ofd.FileName);
+                            WriteAppLog($"CONFIG   : ffmpeg path set to {ofd.FileName}");
+                            keepTrying = true;
+                            SetStatus("Retrying with located FFmpeg...");
+                        }
+                        else
+                        {
+                            SetStatus("FFmpeg not found — download cancelled.");
+                            LogError(fileName, "FFmpeg executable not found", logFile);
+                        }
+                    }
+                    else
+                    {
+                        SetStatus("FFmpeg not found — download cancelled.");
+                        LogError(fileName, "FFmpeg executable not found", logFile);
                     }
                 }
                 catch (Exception ex)
@@ -789,6 +894,12 @@ namespace FFmpegAssistant
             form.ShowDialog(this);
         }
 
+        private void menuSettings_Click_1(object sender, EventArgs e)
+        {
+            using var form = new SettingsForm();
+            form.ShowDialog(this);
+        }
+
         private void btnOpenLogFile_Click_1(object sender, EventArgs e)
         {
             if (_lastLogFile == null || !File.Exists(_lastLogFile))
@@ -823,7 +934,7 @@ namespace FFmpegAssistant
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
             string arguments, string logFile, CancellationToken cancellationToken = default)
         {
-            var psi = new ProcessStartInfo("ffmpeg", arguments)
+            var psi = new ProcessStartInfo(AppSettings.GetFfmpegExe(), arguments)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -887,7 +998,7 @@ namespace FFmpegAssistant
                 return false;
 
             var psi = new ProcessStartInfo(
-                "ffmpeg",
+                AppSettings.GetFfmpegExe(),
                 $"-v error -i \"{filePath}\" -f null -")
             {
                 RedirectStandardOutput = true,
@@ -1006,7 +1117,7 @@ namespace FFmpegAssistant
             // Pre-fill the Season/Episode boxes to match the suggestion so the
             // user can see — and immediately override — the suggested values.
             _updatingSeasonEpisode = true;
-            txtSeason.Text  = season.ToString();
+            txtSeason.Text = season.ToString();
             txtEpisode.Text = episode.ToString();
             _updatingSeasonEpisode = false;
         }
@@ -1021,8 +1132,8 @@ namespace FFmpegAssistant
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    string raw      = lastArg.Value.Trim().Trim('"');
-                    string ext      = Path.GetExtension(raw);
+                    string raw = lastArg.Value.Trim().Trim('"');
+                    string ext = Path.GetExtension(raw);
                     string cleanName = ExtractShowName(originalCommand) ?? Path.GetFileNameWithoutExtension(raw);
                     if (!string.IsNullOrEmpty(cleanName))
                         txtFileName.Text = cleanName + ext;
@@ -1101,7 +1212,7 @@ namespace FFmpegAssistant
             if (!string.IsNullOrEmpty(showName))
             {
                 string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
-                string showFolder   = Path.Combine(baseTvFolder, showName);
+                string showFolder = Path.Combine(baseTvFolder, showName);
                 if (!cboFolder.Items.Contains(showFolder))
                     cboFolder.Items.Add(showFolder);
                 cboFolder.SelectedItem = showFolder;
@@ -1131,15 +1242,15 @@ namespace FFmpegAssistant
             string nameOnly = Path.GetFileNameWithoutExtension(lastArg.Value.Trim().Trim('"'));
             if (string.IsNullOrWhiteSpace(nameOnly)) return null;
 
-            int dashIndex    = nameOnly.IndexOf('-');
+            int dashIndex = nameOnly.IndexOf('-');
             int bracketIndex = nameOnly.IndexOf('[');
 
             int delimIndex = (dashIndex, bracketIndex) switch
             {
                 ( >= 0, >= 0) => Math.Min(dashIndex, bracketIndex),
-                ( >= 0, _)    => dashIndex,
-                (_, >= 0)     => bracketIndex,
-                _             => -1
+                ( >= 0, _) => dashIndex,
+                (_, >= 0) => bracketIndex,
+                _ => -1
             };
 
             string name = delimIndex > 0 ? nameOnly[..delimIndex].Trim() : nameOnly.Trim();
@@ -1194,7 +1305,7 @@ namespace FFmpegAssistant
             if (subfolder == null) return;
 
             string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
-            string showFolder   = Path.Combine(baseTvFolder, subfolder);
+            string showFolder = Path.Combine(baseTvFolder, subfolder);
 
             if (!cboFolder.Items.Contains(showFolder))
                 cboFolder.Items.Add(showFolder);
