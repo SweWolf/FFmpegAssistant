@@ -29,9 +29,13 @@ namespace FFmpegAssistant
             label3 = new Label();
             txtNumberOfDownloadAttempts = new TextBox();
             label2 = new Label();
+            groupBox3 = new GroupBox();
+            cboNewVersionCheck = new ComboBox();
+            label4 = new Label();
             grpFfmpeg.SuspendLayout();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
+            groupBox3.SuspendLayout();
             SuspendLayout();
             // 
             // grpFfmpeg
@@ -88,7 +92,7 @@ namespace FFmpegAssistant
             // btnOK
             // 
             btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnOK.Location = new Point(326, 398);
+            btnOK.Location = new Point(326, 519);
             btnOK.Name = "btnOK";
             btnOK.Size = new Size(75, 27);
             btnOK.TabIndex = 7;
@@ -100,7 +104,7 @@ namespace FFmpegAssistant
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(407, 398);
+            btnCancel.Location = new Point(407, 519);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(75, 27);
             btnCancel.TabIndex = 8;
@@ -154,15 +158,15 @@ namespace FFmpegAssistant
             // 
             label3.AutoSize = true;
             label3.ForeColor = SystemColors.GrayText;
-            label3.Location = new Point(15, 79);
+            label3.Location = new Point(11, 79);
             label3.Name = "label3";
             label3.Size = new Size(136, 15);
             label3.TabIndex = 2;
             label3.Text = "Leave empty to not retry";
             // 
-            // yxyNumberOfDownloadAttempts
+            // txtNumberOfDownloadAttempts
             // 
-            txtNumberOfDownloadAttempts.Location = new Point(15, 43);
+            txtNumberOfDownloadAttempts.Location = new Point(12, 39);
             txtNumberOfDownloadAttempts.Name = "txtNumberOfDownloadAttempts";
             txtNumberOfDownloadAttempts.Size = new Size(199, 23);
             txtNumberOfDownloadAttempts.TabIndex = 4;
@@ -173,9 +177,39 @@ namespace FFmpegAssistant
             label2.AutoSize = true;
             label2.Location = new Point(12, 21);
             label2.Name = "label2";
-            label2.Size = new Size(148, 15);
+            label2.Size = new Size(174, 15);
             label2.TabIndex = 0;
             label2.Text = "Maximum Number of Attempts";
+            // 
+            // groupBox3
+            // 
+            groupBox3.Controls.Add(cboNewVersionCheck);
+            groupBox3.Controls.Add(label4);
+            groupBox3.Location = new Point(12, 405);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Size = new Size(470, 89);
+            groupBox3.TabIndex = 6;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "Check for new version";
+            // 
+            // cboNewVersionCheck
+            // 
+            cboNewVersionCheck.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboNewVersionCheck.FormattingEnabled = true;
+            cboNewVersionCheck.Items.AddRange(new object[] { "Yes", "No" });
+            cboNewVersionCheck.Location = new Point(10, 46);
+            cboNewVersionCheck.Name = "cboNewVersionCheck";
+            cboNewVersionCheck.Size = new Size(218, 23);
+            cboNewVersionCheck.TabIndex = 1;
+            // 
+            // label4
+            // 
+            label4.AutoSize = true;
+            label4.Location = new Point(10, 28);
+            label4.Name = "label4";
+            label4.Size = new Size(177, 15);
+            label4.TabIndex = 0;
+            label4.Text = "Check for new version at startup";
             // 
             // SettingsForm
             // 
@@ -183,8 +217,9 @@ namespace FFmpegAssistant
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(494, 437);
+            ClientSize = new Size(494, 558);
             ControlBox = false;
+            Controls.Add(groupBox3);
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
             Controls.Add(grpFfmpeg);
@@ -203,6 +238,8 @@ namespace FFmpegAssistant
             groupBox1.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
+            groupBox3.ResumeLayout(false);
+            groupBox3.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -222,5 +259,8 @@ namespace FFmpegAssistant
         private Label label3;
         private TextBox txtNumberOfDownloadAttempts;
         private Label label2;
+        private GroupBox groupBox3;
+        private ComboBox cboNewVersionCheck;
+        private Label label4;
     }
 }

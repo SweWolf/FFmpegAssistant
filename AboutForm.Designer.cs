@@ -17,6 +17,7 @@ namespace FFmpegAssistant
             picIcon = new PictureBox();
             lblAppName = new Label();
             lblVersion = new Label();
+            lblUpdateStatus = new Label();
             pnlContent = new Panel();
             grpFfmpeg = new GroupBox();
             lblFfmpegVer = new Label();
@@ -41,10 +42,11 @@ namespace FFmpegAssistant
             pnlHeader.Controls.Add(picIcon);
             pnlHeader.Controls.Add(lblAppName);
             pnlHeader.Controls.Add(lblVersion);
+            pnlHeader.Controls.Add(lblUpdateStatus);
             pnlHeader.Dock = DockStyle.Top;
             pnlHeader.Location = new Point(0, 0);
             pnlHeader.Name = "pnlHeader";
-            pnlHeader.Size = new Size(440, 88);
+            pnlHeader.Size = new Size(440, 105);
             pnlHeader.TabIndex = 0;
             // 
             // picIcon
@@ -78,6 +80,16 @@ namespace FFmpegAssistant
             lblVersion.TabIndex = 2;
             lblVersion.Text = "Version 1.0.0";
             // 
+            // lblUpdateStatus
+            // 
+            lblUpdateStatus.AutoSize = true;
+            lblUpdateStatus.Font = new Font("Segoe UI", 8.5F);
+            lblUpdateStatus.ForeColor = Color.FromArgb(160, 195, 225);
+            lblUpdateStatus.Location = new Point(86, 73);
+            lblUpdateStatus.Name = "lblUpdateStatus";
+            lblUpdateStatus.Size = new Size(0, 15);
+            lblUpdateStatus.TabIndex = 3;
+            // 
             // pnlContent
             // 
             pnlContent.BackColor = Color.White;
@@ -89,9 +101,9 @@ namespace FFmpegAssistant
             pnlContent.Controls.Add(lblBuiltWith);
             pnlContent.Controls.Add(btnClose);
             pnlContent.Dock = DockStyle.Fill;
-            pnlContent.Location = new Point(0, 88);
+            pnlContent.Location = new Point(0, 105);
             pnlContent.Name = "pnlContent";
-            pnlContent.Size = new Size(440, 332);
+            pnlContent.Size = new Size(440, 330);
             pnlContent.TabIndex = 1;
             // 
             // grpFfmpeg
@@ -206,7 +218,7 @@ namespace FFmpegAssistant
             btnClose.FlatStyle = FlatStyle.Flat;
             btnClose.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             btnClose.ForeColor = Color.White;
-            btnClose.Location = new Point(340, 290);
+            btnClose.Location = new Point(340, 288);
             btnClose.Name = "btnClose";
             btnClose.Size = new Size(80, 28);
             btnClose.TabIndex = 5;
@@ -218,7 +230,7 @@ namespace FFmpegAssistant
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(440, 420);
+            ClientSize = new Size(440, 435);
             Controls.Add(pnlContent);
             Controls.Add(pnlHeader);
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -241,6 +253,7 @@ namespace FFmpegAssistant
         private PictureBox picIcon;
         private Label lblAppName;
         private Label lblVersion;
+        private Label lblUpdateStatus;
         private Panel pnlContent;
         private Label lblDescription;
         private Label lblCopyright;

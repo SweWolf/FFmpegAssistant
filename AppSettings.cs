@@ -124,6 +124,49 @@ namespace FFmpegAssistant
             }
         }
 
+        // -------------------------------------------------------------------------
+        // Check for updates on startup: "Yes" (default) | "No"
+        // -------------------------------------------------------------------------
+
+        private static readonly string UpdateCheckFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "check-for-updates.txt");
+
+        private static string? _cachedUpdateCheck;
+
+        public static string CheckForUpdatesOnStartup
+        {
+            get
+            {
+                if (_cachedUpdateCheck != null) return _cachedUpdateCheck;
+                try
+                {
+                    if (File.Exists(UpdateCheckFile))
+                    {
+                        string v = File.ReadAllText(UpdateCheckFile, System.Text.Encoding.UTF8).Trim();
+                        if (v == "Yes" || v == "No")
+                        {
+                            _cachedUpdateCheck = v;
+                            return v;
+                        }
+                    }
+                }
+                catch { }
+                _cachedUpdateCheck = "Yes";
+                return _cachedUpdateCheck;
+            }
+            set
+            {
+                _cachedUpdateCheck = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(UpdateCheckFile)!);
+                    File.WriteAllText(UpdateCheckFile, value, System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
         /// <summary>
         /// Returns "Yes", "No", or "Ask" (default when no setting has been saved).
         /// </summary>

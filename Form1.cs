@@ -63,7 +63,8 @@ namespace FFmpegAssistant
             // No override needed here — overriding can lose alpha channel transparency.
 
             // Check for updates in the background — does not block startup
-            _ = CheckForUpdatesAsync();
+            if (AppSettings.CheckForUpdatesOnStartup == "Yes")
+                _ = CheckForUpdatesAsync();
 
             InitializeProgressGrid();
 

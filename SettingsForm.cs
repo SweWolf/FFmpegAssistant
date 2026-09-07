@@ -12,6 +12,7 @@ namespace FFmpegAssistant
             txtFfmpegPath.Text = AppSettings.FfmpegExePath ?? string.Empty;
             cboReplaceQas.SelectedItem = AppSettings.ReplaceAudioQas;
             txtNumberOfDownloadAttempts.Text = AppSettings.NumberOfDownloadAttempts.ToString();
+            cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
         }
 
         private void btnBrowseFfmpeg_Click(object sender, EventArgs e)
@@ -47,6 +48,8 @@ namespace FFmpegAssistant
 
             string attemptsText = txtNumberOfDownloadAttempts.Text.Trim();
             AppSettings.NumberOfDownloadAttempts = int.TryParse(attemptsText, out int attempts) ? attempts : 1;
+
+            AppSettings.CheckForUpdatesOnStartup = cboNewVersionCheck.SelectedItem?.ToString() ?? "Yes";
 
             DialogResult = DialogResult.OK;
             Close();
