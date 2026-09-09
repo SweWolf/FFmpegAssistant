@@ -11,6 +11,8 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private int _totalM3u8Segments;
+        private int _m3u8SegmentsOpened;
         private bool _updatingSeasonEpisode;
         private bool _closeAfterCancel;
 
@@ -100,10 +102,17 @@ namespace FFmpegAssistant
             // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
             txtEpisode.TextChanged += txtEpisode_TextChanged;
 
-            // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted
+            // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted.
+            // Also auto-wrap bare URLs into a full ffmpeg command.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
                 string cmd = txtOriginalCommand.Text.Trim();
+                if (IsBarUrl(cmd))
+                {
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{cmd}\" subtitles.srt";
+                    txtFileName.Text = "subtitles.srt";
+                    return;
+                }
                 if (cmd.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase) && cmd.Length > 30)
                     TryApplyTvShowHistory(cmd);
             };
@@ -117,7 +126,12 @@ namespace FFmpegAssistant
             if (Clipboard.ContainsText())
             {
                 string text = Clipboard.GetText().Trim();
-                if (text.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                if (IsBarUrl(text))
+                {
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{text}\" subtitles.srt";
+                    txtFileName.Text = "subtitles.srt";
+                }
+                else if (text.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
                 {
                     txtOriginalCommand.Text = text;
                     // Defer until after the form is fully shown so the ComboBox updates correctly
@@ -193,6 +207,7 @@ namespace FFmpegAssistant
         {
             _totalDuration = TimeSpan.Zero;
             _progressStarted = false;
+            _m3u8SegmentsOpened = 0;
             _speedSamples.Clear();
             foreach (DataGridViewRow row in dgvProgress.Rows)
                 row.Cells["colValue"].Value = "";
@@ -216,6 +231,29 @@ namespace FFmpegAssistant
 
         private void ProcessOutputLine(string line)
         {
+            // M3U8 segment-based progress for SRT subtitle downloads.
+            // Each real webvtt segment opening is one unit of work; dummy.vtt ad segments are skipped.
+            if (_totalM3u8Segments > 0 &&
+                line.Contains("Opening '", StringComparison.OrdinalIgnoreCase) &&
+                line.Contains(".webvtt'", StringComparison.OrdinalIgnoreCase) &&
+                !line.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+            {
+                _m3u8SegmentsOpened++;
+                int pct = Math.Min(_m3u8SegmentsOpened * 100 / _totalM3u8Segments, 99);
+                if (!_progressStarted)
+                {
+                    _progressStarted = true;
+                    SetStatus("Downloading subtitles...");
+                }
+                Invoke(() =>
+                {
+                    progressBar.Value = pct;
+                    UpdateGridRow("Time", $"{_m3u8SegmentsOpened}/{_totalM3u8Segments}");
+                    TaskbarProgress.SetNormal(this, pct, 100);
+                });
+                return;
+            }
+
             // Status updates during the pre-download phase
             if (!_progressStarted)
             {
@@ -388,7 +426,13 @@ namespace FFmpegAssistant
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    fileName = Path.GetFileName(lastArg.Value.Trim().Trim('"'));
+                    string rawArg = lastArg.Value.Trim().Trim('"');
+                    // If the last argument is the input URL (no output filename was given), default to subtitles.srt
+                    if (rawArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                        rawArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        fileName = "subtitles.srt";
+                    else
+                        fileName = Path.GetFileName(rawArg);
                     txtFileName.Text = fileName;
                 }
 
@@ -404,7 +448,8 @@ namespace FFmpegAssistant
             // "Episode.TheCoolName.mp4" rather than losing the user's intended text.
             string correctExt = GetCommandOutputExtension(originalCommand);
             if (!string.IsNullOrEmpty(correctExt) &&
-                !fileName.EndsWith(correctExt, StringComparison.OrdinalIgnoreCase))
+                !fileName.EndsWith(correctExt, StringComparison.OrdinalIgnoreCase) &&
+                !fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 fileName = fileName + correctExt;
                 txtFileName.Text = fileName;
@@ -458,10 +503,13 @@ namespace FFmpegAssistant
 
             string outputPath = Path.Combine(folder, fileName);
 
+            bool isSrt = fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
+
             // In watch-while-downloading mode, download to a .ts file first.
             // In normal mode, download to a "(part)" file to protect against power outages —
             // the file is renamed to the final name only after successful validation.
-            bool watchMode = chkEnableWatchingWhileDownloading.Checked;
+            // SRT files use the same (part) protection but skip watch mode and video validation.
+            bool watchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt;
             string partPath = Path.Combine(folder,
                 Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
             string downloadPath = watchMode
@@ -497,6 +545,11 @@ namespace FFmpegAssistant
             string logFile = Path.Combine(logsFolder, Path.GetFileNameWithoutExtension(fileName) + ".txt");
 
             string arguments = command[(command.IndexOf(' ') + 1)..];
+
+            // Pre-fetch the M3U8 playlist to count real subtitle segments for progress tracking.
+            // Only attempted for SRT downloads; failure is silently ignored.
+            _totalM3u8Segments = isSrt ? await TryGetM3u8SegmentCountAsync(originalCommand) : 0;
+            _m3u8SegmentsOpened = 0;
 
             int maxAttempts = AppSettings.NumberOfDownloadAttempts;
             int attempt = 0;
@@ -592,6 +645,25 @@ namespace FFmpegAssistant
                                 SetStatus("Conversion failed — .ts file kept.");
                                 return;
                             }
+                        }
+
+                        // SRT subtitle files: rename (part) file to final name, skip video validation
+                        if (isSrt)
+                        {
+                            SetStatus("Finalizing...");
+                            if (File.Exists(outputPath)) File.Delete(outputPath);
+                            File.Move(partPath, outputPath);
+                            _lastOutputPath = outputPath;
+                            btnOpenFile.Enabled = true;
+                            WriteAppLog($"FINALIZE : Renamed (part) file to final name");
+                            WriteAppLog($"RESULT   : SUCCESS — SRT subtitle file");
+                            progressBar.Value = 100;
+                            lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                            TaskbarProgress.Clear(this);
+                            SetStatus("Done");
+                            if (!_closeAfterCancel)
+                                MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            continue;
                         }
 
                         SetStatus("Validating downloaded file...");
@@ -914,6 +986,53 @@ namespace FFmpegAssistant
         // -------------------------------------------------------------------------
         // FFmpeg process
         // -------------------------------------------------------------------------
+
+        private static async Task<int> TryGetM3u8SegmentCountAsync(string command)
+        {
+            try
+            {
+                var m = Regex.Match(command, @"-i\s+""([^""]+)""", RegexOptions.IgnoreCase);
+                if (!m.Success) return 0;
+
+                string input = m.Groups[1].Value;
+                string content;
+
+                if (File.Exists(input))
+                {
+                    content = await File.ReadAllTextAsync(input);
+                }
+                else if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         input.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                    content = await client.GetStringAsync(input);
+                }
+                else return 0;
+
+                // Count #EXTINF entries whose URL line is not a dummy/ad segment
+                int count = 0;
+                bool nextIsUrl = false;
+                foreach (string line in content.Split('\n'))
+                {
+                    string t = line.Trim();
+                    if (t.StartsWith("#EXTINF:", StringComparison.OrdinalIgnoreCase))
+                        nextIsUrl = true;
+                    else if (nextIsUrl)
+                    {
+                        nextIsUrl = false;
+                        if (!t.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                            count++;
+                    }
+                }
+                return count;
+            }
+            catch { return 0; }
+        }
+
+        private static bool IsBarUrl(string s) =>
+            (s.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+             s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) &&
+            !s.Contains(' ');
 
         private static string GetCommandOutputExtension(string command)
         {
