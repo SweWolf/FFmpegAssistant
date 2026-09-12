@@ -13,12 +13,15 @@ namespace FFmpegAssistant
         private bool _progressStarted;
         private int _totalM3u8Segments;
         private int _m3u8SegmentsOpened;
+        private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
         private bool _closeAfterCancel;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
         // -------------------------------------------------------------------------
+
+        private enum M3u8ContentType { Unknown, Subtitle, Video }
 
         private enum EstimationMode { Stable, CurrentSpeed }
 
@@ -54,8 +57,11 @@ namespace FFmpegAssistant
               "connection timed out", "no route to host", "no such file",
               "unable to open", "broken pipe", "i/o error", "network unreachable" };
 
-        public Form1()
+        private readonly string? _startupCommand;
+
+        public Form1(string? startupCommand = null)
         {
+            _startupCommand = startupCommand;
             InitializeComponent();
         }
 
@@ -103,14 +109,15 @@ namespace FFmpegAssistant
             txtEpisode.TextChanged += txtEpisode_TextChanged;
 
             // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted.
-            // Also auto-wrap bare URLs into a full ffmpeg command.
+            // Also auto-wrap bare URLs and local M3U8 file paths into a full ffmpeg command.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
                 string cmd = txtOriginalCommand.Text.Trim();
-                if (IsBarUrl(cmd))
+                if (IsBarUrl(cmd) || IsLocalM3u8Path(cmd))
                 {
-                    txtOriginalCommand.Text = $"ffmpeg -i \"{cmd}\" subtitles.srt";
-                    txtFileName.Text = "subtitles.srt";
+                    string stripped = cmd.Trim('"');
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{stripped}\"";
+                    txtFileName.Text = "";
                     return;
                 }
                 if (cmd.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase) && cmd.Length > 30)
@@ -123,19 +130,24 @@ namespace FFmpegAssistant
             txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
             txtFileName.TextChanged += (s, _) => txtStatus.Clear();
 
-            if (Clipboard.ContainsText())
+            // Command-line argument takes priority; fall back to clipboard when nothing was passed.
+            string? startup = _startupCommand;
+            if (startup == null && Clipboard.ContainsText())
+                startup = Clipboard.GetText().Trim();
+
+            if (startup != null)
             {
-                string text = Clipboard.GetText().Trim();
-                if (IsBarUrl(text))
+                if (IsBarUrl(startup) || IsLocalM3u8Path(startup))
                 {
-                    txtOriginalCommand.Text = $"ffmpeg -i \"{text}\" subtitles.srt";
-                    txtFileName.Text = "subtitles.srt";
+                    string stripped = startup.Trim('"');
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{stripped}\"";
+                    txtFileName.Text = "";
                 }
-                else if (text.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                else if (startup.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
                 {
-                    txtOriginalCommand.Text = text;
+                    txtOriginalCommand.Text = startup;
                     // Defer until after the form is fully shown so the ComboBox updates correctly
-                    BeginInvoke(() => TryApplyTvShowHistory(text));
+                    BeginInvoke(() => TryApplyTvShowHistory(startup));
                 }
             }
         }
@@ -231,19 +243,20 @@ namespace FFmpegAssistant
 
         private void ProcessOutputLine(string line)
         {
-            // M3U8 segment-based progress for SRT subtitle downloads.
-            // Each real webvtt segment opening is one unit of work; dummy.vtt ad segments are skipped.
+            // M3U8 segment-based progress: count real segment openings vs total from pre-fetched playlist.
+            // Segment type is determined by M3U8 content type detected at pre-fetch time.
             if (_totalM3u8Segments > 0 &&
                 line.Contains("Opening '", StringComparison.OrdinalIgnoreCase) &&
-                line.Contains(".webvtt'", StringComparison.OrdinalIgnoreCase) &&
-                !line.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                IsRealM3u8Segment(line))
             {
                 _m3u8SegmentsOpened++;
                 int pct = Math.Min(_m3u8SegmentsOpened * 100 / _totalM3u8Segments, 99);
                 if (!_progressStarted)
                 {
                     _progressStarted = true;
-                    SetStatus("Downloading subtitles...");
+                    SetStatus(_m3u8ContentType == M3u8ContentType.Subtitle
+                        ? "Downloading subtitles..."
+                        : "Downloading segments...");
                 }
                 Invoke(() =>
                 {
@@ -421,16 +434,26 @@ namespace FFmpegAssistant
                 return;
             }
 
+            // Pre-fetch the M3U8 playlist (if applicable) to detect content type and segment count.
+            // This runs before filename determination so we can suggest the right default extension.
+            var m3u8Info = await TryGetM3u8InfoAsync(originalCommand);
+            _m3u8ContentType = m3u8Info.Type;
+            _totalM3u8Segments = m3u8Info.SegmentCount;
+            _m3u8SegmentsOpened = 0;
+
             if (string.IsNullOrEmpty(fileName))
             {
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
                     string rawArg = lastArg.Value.Trim().Trim('"');
-                    // If the last argument is the input URL (no output filename was given), default to subtitles.srt
                     if (rawArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                        rawArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                        fileName = "subtitles.srt";
+                        rawArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                        IsLocalM3u8Path(rawArg))
+                    {
+                        // No explicit output filename — use M3U8 content type to pick a sensible default
+                        fileName = _m3u8ContentType == M3u8ContentType.Subtitle ? "subtitles.srt" : "output.mp4";
+                    }
                     else
                         fileName = Path.GetFileName(rawArg);
                     txtFileName.Text = fileName;
@@ -518,6 +541,18 @@ namespace FFmpegAssistant
 
             string command = ReplaceOutputFile(originalCommand, downloadPath);
 
+            // When the input is a local M3U8 file, FFmpeg restricts allowed protocols to
+            // file,crypto,data — blocking https:// segment URLs inside the playlist.
+            // Inject the protocol whitelist before the -i flag so all segments can be fetched.
+            var localM3u8InputMatch = Regex.Match(command,
+                @"-i\s+(?:""[^""]*\.m3u[8]?""|[^\s]*\.m3u[8]?(?=\s|$))",
+                RegexOptions.IgnoreCase);
+            if (localM3u8InputMatch.Success)
+            {
+                string whitelist = "-protocol_whitelist file,crypto,data,http,https,tcp,tls -allowed_extensions ALL ";
+                command = command[..localM3u8InputMatch.Index] + whitelist + command[localM3u8InputMatch.Index..];
+            }
+
             // Overwrite protection — always check the final output file
             if (File.Exists(outputPath))
             {
@@ -545,11 +580,6 @@ namespace FFmpegAssistant
             string logFile = Path.Combine(logsFolder, Path.GetFileNameWithoutExtension(fileName) + ".txt");
 
             string arguments = command[(command.IndexOf(' ') + 1)..];
-
-            // Pre-fetch the M3U8 playlist to count real subtitle segments for progress tracking.
-            // Only attempted for SRT downloads; failure is silently ignored.
-            _totalM3u8Segments = isSrt ? await TryGetM3u8SegmentCountAsync(originalCommand) : 0;
-            _m3u8SegmentsOpened = 0;
 
             int maxAttempts = AppSettings.NumberOfDownloadAttempts;
             int attempt = 0;
@@ -650,6 +680,20 @@ namespace FFmpegAssistant
                         // SRT subtitle files: rename (part) file to final name, skip video validation
                         if (isSrt)
                         {
+                            if (new FileInfo(partPath).Length == 0)
+                            {
+                                WriteAppLog($"RESULT   : FAILED — output file is empty (0 bytes)");
+                                progressBar.Value = 0;
+                                lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                                LogError(fileName, "Output file is empty — download may have failed", logFile);
+                                MessageBox.Show(
+                                    $"The output file is empty (0 bytes):\n\n{partPath}\n\n" +
+                                    "The download likely failed — e.g. blocked segments or an invalid source.\n" +
+                                    "Check the log file for details.",
+                                    "Empty Output File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                continue;
+                            }
+
                             SetStatus("Finalizing...");
                             if (File.Exists(outputPath)) File.Delete(outputPath);
                             File.Move(partPath, outputPath);
@@ -987,46 +1031,78 @@ namespace FFmpegAssistant
         // FFmpeg process
         // -------------------------------------------------------------------------
 
-        private static async Task<int> TryGetM3u8SegmentCountAsync(string command)
+        private static async Task<(int SegmentCount, M3u8ContentType Type)> TryGetM3u8InfoAsync(string command)
         {
             try
             {
                 var m = Regex.Match(command, @"-i\s+""([^""]+)""", RegexOptions.IgnoreCase);
-                if (!m.Success) return 0;
+                if (!m.Success) return (0, M3u8ContentType.Unknown);
 
                 string input = m.Groups[1].Value;
-                string content;
 
-                if (File.Exists(input))
-                {
+                // Only attempt for .m3u8/.m3u URLs or local files
+                bool isUrl = input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                             input.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+                bool isFile = File.Exists(input);
+                if (!isUrl && !isFile) return (0, M3u8ContentType.Unknown);
+
+                string content;
+                if (isFile)
                     content = await File.ReadAllTextAsync(input);
-                }
-                else if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                         input.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                else
                 {
                     using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
                     content = await client.GetStringAsync(input);
                 }
-                else return 0;
 
-                // Count #EXTINF entries whose URL line is not a dummy/ad segment
+                // Master playlist — has variant stream entries; cannot count leaf segments here
+                if (content.Contains("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase))
+                    return (0, M3u8ContentType.Video);
+
+                // Count real (non-dummy) #EXTINF segment URLs and classify by extension
                 int count = 0;
+                bool isSubtitle = false;
+                bool isVideo = false;
                 bool nextIsUrl = false;
                 foreach (string line in content.Split('\n'))
                 {
                     string t = line.Trim();
                     if (t.StartsWith("#EXTINF:", StringComparison.OrdinalIgnoreCase))
+                    {
                         nextIsUrl = true;
+                    }
                     else if (nextIsUrl)
                     {
                         nextIsUrl = false;
                         if (!t.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                        {
                             count++;
+                            string tl = t.ToLowerInvariant();
+                            if (tl.Contains(".webvtt") || tl.Contains(".vtt"))
+                                isSubtitle = true;
+                            else if (tl.Contains(".ts") || tl.Contains(".m4s"))
+                                isVideo = true;
+                        }
                     }
                 }
-                return count;
+
+                M3u8ContentType type = isSubtitle ? M3u8ContentType.Subtitle
+                                     : isVideo    ? M3u8ContentType.Video
+                                                  : M3u8ContentType.Unknown;
+                return (count, type);
             }
-            catch { return 0; }
+            catch { return (0, M3u8ContentType.Unknown); }
+        }
+
+        private bool IsRealM3u8Segment(string ffmpegLine)
+        {
+            if (ffmpegLine.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string lower = ffmpegLine.ToLowerInvariant();
+            return _m3u8ContentType == M3u8ContentType.Subtitle
+                ? lower.Contains(".webvtt'") || lower.Contains(".vtt'")
+                : lower.Contains(".ts'") || lower.Contains(".m4s'");
         }
 
         private static bool IsBarUrl(string s) =>
@@ -1034,10 +1110,22 @@ namespace FFmpegAssistant
              s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) &&
             !s.Contains(' ');
 
+        // Returns true for a bare local file path to an M3U8 playlist (quoted or unquoted)
+        private static bool IsLocalM3u8Path(string s)
+        {
+            string stripped = s.Trim('"').Trim();
+            return stripped.Length >= 3
+                && char.IsLetter(stripped[0]) && stripped[1] == ':' && stripped[2] == '\\'
+                && (stripped.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+                    stripped.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string GetCommandOutputExtension(string command)
         {
             var match = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
             if (!match.Success) return string.Empty;
+            // If the last arg is the input (no explicit output in the command), return empty
+            if (LastArgIsInput(command, match)) return string.Empty;
             return Path.GetExtension(match.Value.Trim().Trim('"')); // e.g. ".mp4"
         }
 
@@ -1048,7 +1136,25 @@ namespace FFmpegAssistant
                 return command;
 
             string newArg = newOutputPath.Contains(' ') ? $"\"{newOutputPath}\"" : newOutputPath;
+
+            // If the last arg is the input (no explicit output), append rather than replace
+            if (LastArgIsInput(command, match))
+                return command.TrimEnd() + " " + newArg;
+
             return command[..match.Index] + newArg;
+        }
+
+        // Returns true when the last argument of the command is an input (not an output):
+        // either an http/https URL, or the argument directly following the -i flag.
+        private static bool LastArgIsInput(string command, Match lastArgMatch)
+        {
+            string lastArg = lastArgMatch.Value.Trim().Trim('"');
+            if (lastArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                lastArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Check whether the text before this arg ends with "-i"
+            return command[..lastArgMatch.Index].TrimEnd()
+                .EndsWith("-i", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
