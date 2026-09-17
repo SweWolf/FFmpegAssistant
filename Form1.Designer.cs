@@ -66,6 +66,8 @@ namespace FFmpegAssistant
             chkEnableWatchingWhileDownloading = new CheckBox();
             label6 = new Label();
             txtAttempt = new TextBox();
+            subtitlesToolStripMenuItem = new ToolStripMenuItem();
+            mnuExtractSubtitleFile = new ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -245,7 +247,7 @@ namespace FFmpegAssistant
             // 
             // menuStrip
             // 
-            menuStrip.Items.AddRange(new ToolStripItem[] { menuTools, menuHelp });
+            menuStrip.Items.AddRange(new ToolStripItem[] { menuTools, subtitlesToolStripMenuItem, menuHelp });
             menuStrip.Location = new Point(0, 0);
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(1074, 24);
@@ -261,14 +263,14 @@ namespace FFmpegAssistant
             // menuCreateShortcut
             // 
             menuCreateShortcut.Name = "menuCreateShortcut";
-            menuCreateShortcut.Size = new Size(165, 22);
+            menuCreateShortcut.Size = new Size(180, 22);
             menuCreateShortcut.Text = "Create Shortcut...";
             menuCreateShortcut.Click += menuCreateShortcut_Click;
             // 
             // menuSettings
             // 
             menuSettings.Name = "menuSettings";
-            menuSettings.Size = new Size(165, 22);
+            menuSettings.Size = new Size(180, 22);
             menuSettings.Text = "Settings...";
             menuSettings.Click += menuSettings_Click_1;
             // 
@@ -282,7 +284,7 @@ namespace FFmpegAssistant
             // menuAbout
             // 
             menuAbout.Name = "menuAbout";
-            menuAbout.Size = new Size(107, 22);
+            menuAbout.Size = new Size(180, 22);
             menuAbout.Text = "About";
             menuAbout.Click += menuAbout_Click;
             // 
@@ -440,6 +442,20 @@ namespace FFmpegAssistant
             txtAttempt.TabIndex = 18;
             txtAttempt.TabStop = false;
             // 
+            // subtitlesToolStripMenuItem
+            // 
+            subtitlesToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { mnuExtractSubtitleFile });
+            subtitlesToolStripMenuItem.Name = "subtitlesToolStripMenuItem";
+            subtitlesToolStripMenuItem.Size = new Size(64, 20);
+            subtitlesToolStripMenuItem.Text = "Subtitles";
+            // 
+            // mnuExtractSubtitleFile
+            // 
+            mnuExtractSubtitleFile.Name = "mnuExtractSubtitleFile";
+            mnuExtractSubtitleFile.Size = new Size(182, 22);
+            mnuExtractSubtitleFile.Text = "Extract Subtitle File...";
+            mnuExtractSubtitleFile.Click += mnuExtractSubtitleFile_Click;
+            // 
             // Form1
             // 
             AcceptButton = btnRun;
@@ -523,5 +539,7 @@ namespace FFmpegAssistant
         private TextBox txtSeason;
         private Label label6;
         private TextBox txtAttempt;
+        private ToolStripMenuItem subtitlesToolStripMenuItem;
+        private ToolStripMenuItem mnuExtractSubtitleFile;
     }
 }

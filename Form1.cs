@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace FFmpegAssistant
@@ -16,6 +17,8 @@ namespace FFmpegAssistant
         private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
         private bool _closeAfterCancel;
+        private bool _commandSetByExtractFeature;
+        private bool _settingExtractCommand;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -126,8 +129,14 @@ namespace FFmpegAssistant
             // Also trigger when the box loses focus (catches manual edits)
             txtOriginalCommand.Leave += (s, _) => TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
 
-            // Clear status when the user starts editing the input fields
-            txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
+            // Clear status when the user starts editing the input fields.
+            // Also clear the extract-feature flag when the user replaces the command themselves.
+            txtOriginalCommand.TextChanged += (s, _) =>
+            {
+                txtStatus.Clear();
+                if (!_settingExtractCommand)
+                    _commandSetByExtractFeature = false;
+            };
             txtFileName.TextChanged += (s, _) => txtStatus.Clear();
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
@@ -1017,6 +1026,111 @@ namespace FFmpegAssistant
             form.ShowDialog(this);
         }
 
+        private async void mnuExtractSubtitleFile_Click(object sender, EventArgs e)
+        {
+            // Default to the last downloaded video file; fall back to the Windows Videos folder
+            string[] videoExts = { ".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts", ".wmv" };
+            string videosFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            bool lastIsVideo = _lastOutputPath != null &&
+                File.Exists(_lastOutputPath) &&
+                videoExts.Contains(Path.GetExtension(_lastOutputPath), StringComparer.OrdinalIgnoreCase);
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Select a video file to extract subtitles from",
+                Filter = "Video files|*.mkv;*.mp4;*.avi;*.mov;*.ts;*.m2ts;*.wmv|All files (*.*)|*.*",
+                InitialDirectory = lastIsVideo ? Path.GetDirectoryName(_lastOutputPath)! : videosFolder,
+                FileName = lastIsVideo ? Path.GetFileName(_lastOutputPath) : string.Empty
+            };
+            if (ofd.ShowDialog(this) != DialogResult.OK) return;
+            string videoPath = ofd.FileName;
+
+            // Probe the file for subtitle streams using ffprobe
+            string ffprobePath = GetFfprobeExe();
+            string probeArgs = $"-v quiet -print_format json -show_streams \"{videoPath}\"";
+
+            var psi = new ProcessStartInfo(ffprobePath, probeArgs)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            List<SubtitleStream> streams;
+            try
+            {
+                using var proc = Process.Start(psi)!;
+                string json = await proc.StandardOutput.ReadToEndAsync();
+                await proc.WaitForExitAsync();
+                streams = ParseSubtitleStreams(json);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Could not probe the file:\n\n{ex.Message}\n\nMake sure ffprobe.exe is installed alongside ffmpeg.exe.",
+                    "Probe Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (streams.Count == 0)
+            {
+                MessageBox.Show(
+                    "No subtitle streams were found in the selected file.",
+                    "No Subtitles", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Let the user pick which subtitle stream to extract
+            using var dlg = new ExtractSubtitleForm(streams);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            SubtitleStream selected = dlg.SelectedStream!;
+
+            // Build the FFmpeg extraction command and populate the main window
+            string suggestedName = Path.GetFileNameWithoutExtension(videoPath) + selected.SuggestedExtension;
+            string extractCommand = $"ffmpeg -i \"{videoPath}\" -map 0:{selected.StreamIndex} \"{suggestedName}\"";
+            _settingExtractCommand = true;
+            txtOriginalCommand.Text = extractCommand;
+            _settingExtractCommand = false;
+            _commandSetByExtractFeature = true;
+            txtFileName.Text = suggestedName;
+        }
+
+        private static string GetFfprobeExe()
+        {
+            string ffmpeg = AppSettings.GetFfmpegExe();
+            if (ffmpeg == "ffmpeg") return "ffprobe";
+            string dir = Path.GetDirectoryName(ffmpeg) ?? string.Empty;
+            string probe = Path.Combine(dir, "ffprobe.exe");
+            return File.Exists(probe) ? probe : "ffprobe";
+        }
+
+        private static List<SubtitleStream> ParseSubtitleStreams(string json)
+        {
+            var result = new List<SubtitleStream>();
+            if (string.IsNullOrWhiteSpace(json)) return result;
+
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("streams", out var streamsEl)) return result;
+
+            foreach (var el in streamsEl.EnumerateArray())
+            {
+                if (!el.TryGetProperty("codec_type", out var typeEl) ||
+                    typeEl.GetString() != "subtitle") continue;
+
+                int index = el.TryGetProperty("index", out var idxEl) ? idxEl.GetInt32() : 0;
+                string codec = el.TryGetProperty("codec_name", out var codecEl) ? codecEl.GetString() ?? "" : "";
+                string lang = "";
+                string title = "";
+                if (el.TryGetProperty("tags", out var tags))
+                {
+                    if (tags.TryGetProperty("language", out var langEl)) lang = langEl.GetString() ?? "";
+                    if (tags.TryGetProperty("title", out var titleEl)) title = titleEl.GetString() ?? "";
+                }
+                result.Add(new SubtitleStream(index, codec, lang, title));
+            }
+            return result;
+        }
+
         private void btnOpenLogFile_Click_1(object sender, EventArgs e)
         {
             if (_lastLogFile == null || !File.Exists(_lastLogFile))
@@ -1040,10 +1154,12 @@ namespace FFmpegAssistant
 
                 string input = m.Groups[1].Value;
 
-                // Only attempt for .m3u8/.m3u URLs or local files
+                // Only attempt for .m3u8/.m3u URLs or local M3U8 files — never read arbitrary files
                 bool isUrl = input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                              input.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-                bool isFile = File.Exists(input);
+                bool isM3u8Ext = input.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+                                 input.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase);
+                bool isFile = isM3u8Ext && File.Exists(input);
                 if (!isUrl && !isFile) return (0, M3u8ContentType.Unknown);
 
                 string content;
@@ -1317,10 +1433,18 @@ namespace FFmpegAssistant
 
         private void SuggestNextEpisode(string folder)
         {
+            if (_commandSetByExtractFeature) return;
             if (!Directory.Exists(folder))
                 return;
 
+            // Only scan files whose extension matches the command's output extension so that
+            // e.g. extracting s01e01.srt from a folder of .mp4 files finds no .srt episodes
+            // and exits without touching the filename the extract feature already set.
+            string commandExt = GetCommandOutputExtension(txtOriginalCommand.Text.Trim());
+
             var matches = Directory.GetFiles(folder)
+                .Where(f => string.IsNullOrEmpty(commandExt) ||
+                            Path.GetExtension(f).Equals(commandExt, StringComparison.OrdinalIgnoreCase))
                 .Select(f => EpisodePattern.Match(Path.GetFileName(f)))
                 .Where(m => m.Success)
                 .OrderBy(m => int.Parse(m.Groups[2].Value))
@@ -1334,9 +1458,23 @@ namespace FFmpegAssistant
             string showName = last.Groups[1].Value;
             int season = int.Parse(last.Groups[2].Value);
             int episode = int.Parse(last.Groups[3].Value) + 1;
-            string ext = last.Groups[4].Value;
+            string ext = !string.IsNullOrEmpty(commandExt) ? commandExt : last.Groups[4].Value;
             string seasonStr = season.ToString().PadLeft(last.Groups[2].Length, '0');
             string episodeStr = episode.ToString().PadLeft(last.Groups[3].Length, '0');
+
+            // Only overwrite the filename when it is empty, or when the current name is the
+            // immediately preceding episode for this show (sequential download flow).
+            // Any other value — e.g. a name set by the extract-subtitle feature — is left alone.
+            string current = txtFileName.Text.Trim();
+            if (!string.IsNullOrEmpty(current))
+            {
+                var cur = EpisodePattern.Match(current);
+                bool isImmediatelyPreceding = cur.Success &&
+                    cur.Groups[1].Value.Equals(showName, StringComparison.OrdinalIgnoreCase) &&
+                    int.Parse(cur.Groups[2].Value) == season &&
+                    int.Parse(cur.Groups[3].Value) + 1 == episode;
+                if (!isImmediatelyPreceding) return;
+            }
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
 
