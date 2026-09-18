@@ -22,9 +22,6 @@ namespace FFmpegAssistant
             lblFfmpegHint = new Label();
             btnOK = new Button();
             btnCancel = new Button();
-            groupBox1 = new GroupBox();
-            cboReplaceQas = new ComboBox();
-            label1 = new Label();
             groupBox2 = new GroupBox();
             label3 = new Label();
             txtNumberOfDownloadAttempts = new TextBox();
@@ -33,7 +30,6 @@ namespace FFmpegAssistant
             cboNewVersionCheck = new ComboBox();
             label4 = new Label();
             grpFfmpeg.SuspendLayout();
-            groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
             SuspendLayout();
@@ -111,36 +107,6 @@ namespace FFmpegAssistant
             btnCancel.Text = "Cancel";
             btnCancel.UseVisualStyleBackColor = true;
             btnCancel.Click += btnCancel_Click;
-            // 
-            // groupBox1
-            // 
-            groupBox1.Controls.Add(cboReplaceQas);
-            groupBox1.Controls.Add(label1);
-            groupBox1.Location = new Point(12, 283);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(470, 96);
-            groupBox1.TabIndex = 5;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Adjust Command";
-            // 
-            // cboReplaceQas
-            // 
-            cboReplaceQas.DropDownStyle = ComboBoxStyle.DropDownList;
-            cboReplaceQas.FormattingEnabled = true;
-            cboReplaceQas.Items.AddRange(new object[] { "Yes", "No", "Ask" });
-            cboReplaceQas.Location = new Point(9, 47);
-            cboReplaceQas.Name = "cboReplaceQas";
-            cboReplaceQas.Size = new Size(281, 23);
-            cboReplaceQas.TabIndex = 6;
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(9, 29);
-            label1.Name = "label1";
-            label1.Size = new Size(208, 15);
-            label1.TabIndex = 0;
-            label1.Text = "Replace \"audio_qas\" with \"audio_eng\"";
             // 
             // groupBox2
             // 
@@ -221,7 +187,6 @@ namespace FFmpegAssistant
             ControlBox = false;
             Controls.Add(groupBox3);
             Controls.Add(groupBox2);
-            Controls.Add(groupBox1);
             Controls.Add(grpFfmpeg);
             Controls.Add(btnOK);
             Controls.Add(btnCancel);
@@ -234,8 +199,6 @@ namespace FFmpegAssistant
             Load += SettingsForm_Load;
             grpFfmpeg.ResumeLayout(false);
             grpFfmpeg.PerformLayout();
-            groupBox1.ResumeLayout(false);
-            groupBox1.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             groupBox3.ResumeLayout(false);
@@ -252,9 +215,6 @@ namespace FFmpegAssistant
         private Label    lblFfmpegHint;
         private Button   btnOK;
         private Button   btnCancel;
-        private GroupBox groupBox1;
-        private Label label1;
-        private ComboBox cboReplaceQas;
         private GroupBox groupBox2;
         private Label label3;
         private TextBox txtNumberOfDownloadAttempts;

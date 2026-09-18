@@ -75,11 +75,11 @@ namespace FFmpegAssistant
         // audio_qas replacement behaviour: "Yes" | "No" | "Ask" (default)
         // -------------------------------------------------------------------------
 
-        private static readonly string ReplaceQasFile = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "SweWolfSoftware", "FFmpegAssist", "audio-qas-replace.txt");
+        //private static readonly string ReplaceQasFile = Path.Combine(
+        //    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        //    "SweWolfSoftware", "FFmpegAssist", "audio-qas-replace.txt");
 
-        private static string? _cachedReplaceQas;
+        //private static string? _cachedReplaceQas;
 
         // -------------------------------------------------------------------------
         // Number of download attempts (1 = no retry, >1 = auto-retry on failure)
@@ -170,37 +170,37 @@ namespace FFmpegAssistant
         /// <summary>
         /// Returns "Yes", "No", or "Ask" (default when no setting has been saved).
         /// </summary>
-        public static string ReplaceAudioQas
-        {
-            get
-            {
-                if (_cachedReplaceQas != null) return _cachedReplaceQas;
-                try
-                {
-                    if (File.Exists(ReplaceQasFile))
-                    {
-                        string v = File.ReadAllText(ReplaceQasFile, System.Text.Encoding.UTF8).Trim();
-                        if (v == "Yes" || v == "No" || v == "Ask")
-                        {
-                            _cachedReplaceQas = v;
-                            return _cachedReplaceQas;
-                        }
-                    }
-                }
-                catch { }
-                _cachedReplaceQas = "Ask";
-                return _cachedReplaceQas;
-            }
-            set
-            {
-                _cachedReplaceQas = value;
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(ReplaceQasFile)!);
-                    File.WriteAllText(ReplaceQasFile, value, System.Text.Encoding.UTF8);
-                }
-                catch { /* never crash the host app */ }
-            }
-        }
+        //public static string ReplaceAudioQas
+        //{
+        //    get
+        //    {
+        //        if (_cachedReplaceQas != null) return _cachedReplaceQas;
+        //        try
+        //        {
+        //            if (File.Exists(ReplaceQasFile))
+        //            {
+        //                string v = File.ReadAllText(ReplaceQasFile, System.Text.Encoding.UTF8).Trim();
+        //                if (v == "Yes" || v == "No" || v == "Ask")
+        //                {
+        //                    _cachedReplaceQas = v;
+        //                    return _cachedReplaceQas;
+        //                }
+        //            }
+        //        }
+        //        catch { }
+        //        _cachedReplaceQas = "Ask";
+        //        return _cachedReplaceQas;
+        //    }
+        //    set
+        //    {
+        //        _cachedReplaceQas = value;
+        //        try
+        //        {
+        //            Directory.CreateDirectory(Path.GetDirectoryName(ReplaceQasFile)!);
+        //            File.WriteAllText(ReplaceQasFile, value, System.Text.Encoding.UTF8);
+        //        }
+        //        catch { /* never crash the host app */ }
+        //    }
+        //}
     }
 }

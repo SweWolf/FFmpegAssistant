@@ -10,7 +10,7 @@ namespace FFmpegAssistant
         private void SettingsForm_Load(object sender, EventArgs e)
         {
             txtFfmpegPath.Text = AppSettings.FfmpegExePath ?? string.Empty;
-            cboReplaceQas.SelectedItem = AppSettings.ReplaceAudioQas;
+            //cboReplaceQas.SelectedItem = AppSettings.ReplaceAudioQas;
             txtNumberOfDownloadAttempts.Text = AppSettings.NumberOfDownloadAttempts.ToString();
             cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
         }
@@ -19,8 +19,8 @@ namespace FFmpegAssistant
         {
             using var ofd = new OpenFileDialog
             {
-                Title    = "Locate ffmpeg.exe",
-                Filter   = "ffmpeg.exe|ffmpeg.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                Title = "Locate ffmpeg.exe",
+                Filter = "ffmpeg.exe|ffmpeg.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
                 FileName = "ffmpeg.exe"
             };
 
@@ -44,7 +44,7 @@ namespace FFmpegAssistant
             else
                 AppSettings.SetFfmpegExe(path);
 
-            AppSettings.ReplaceAudioQas = cboReplaceQas.SelectedItem?.ToString() ?? "Ask";
+            //AppSettings.ReplaceAudioQas = cboReplaceQas.SelectedItem?.ToString() ?? "Ask";
 
             string attemptsText = txtNumberOfDownloadAttempts.Text.Trim();
             AppSettings.NumberOfDownloadAttempts = int.TryParse(attemptsText, out int attempts) ? attempts : 1;

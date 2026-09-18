@@ -12,6 +12,8 @@
     <Authors>Uffe Peter Walderö</Authors>
     <Version>1.3.0</Version>
     <PackageIcon>FFmpegAssistant.png</PackageIcon>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.3.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -62,6 +63,11 @@ namespace FFmpegAssistant
 
         private readonly string? _startupCommand;
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+        private const int EM_SETMARGINS = 0xD3;
+        private const int EC_LEFTMARGIN = 0x1;
+
         public Form1(string? startupCommand = null)
         {
             _startupCommand = startupCommand;
@@ -76,6 +82,9 @@ namespace FFmpegAssistant
             // Check for updates in the background — does not block startup
             if (AppSettings.CheckForUpdatesOnStartup == "Yes")
                 _ = CheckForUpdatesAsync();
+
+            SendMessage(txtStatus.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
+            SendMessage(txtAttempt.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
 
             InitializeProgressGrid();
 
@@ -487,6 +496,7 @@ namespace FFmpegAssistant
                 txtFileName.Text = fileName;
             }
 
+            /* This part of the code is removed since the project "Privatkopiera" now supports selecting audio track
             // Handle "audio_qas" (Swedish voice-over track) according to the user's setting
             if (originalCommand.Contains("audio_qas", StringComparison.OrdinalIgnoreCase))
             {
@@ -517,7 +527,7 @@ namespace FFmpegAssistant
                     }
                 }
                 // "No" → skip silently
-            }
+            }*/
 
             Directory.CreateDirectory(folder);
 
@@ -992,6 +1002,8 @@ namespace FFmpegAssistant
             about.ShowDialog(this);
         }
 
+        private string? _updateReleasePageUrl;
+
         private async Task CheckForUpdatesAsync()
         {
             var currentVersion = System.Reflection.Assembly
@@ -1002,16 +1014,15 @@ namespace FFmpegAssistant
 
             if (result is { IsUpdateAvailable: true })
             {
-                var answer = MessageBox.Show(
-                    $"A new version is available: {result.LatestVersion}\n\n" +
-                    $"You are running version {currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}.\n\n" +
-                    $"Do you want to go to the download page?",
-                    "Update Available", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-
-                if (answer == DialogResult.Yes)
-                    Process.Start(new ProcessStartInfo(result.ReleasePageUrl)
-                    { UseShellExecute = true });
+                _updateReleasePageUrl = result.ReleasePageUrl;
+                menuNewVersion.Visible = true;
             }
+        }
+
+        private void menuNewVersion_Click(object sender, EventArgs e)
+        {
+            if (_updateReleasePageUrl != null)
+                Process.Start(new ProcessStartInfo(_updateReleasePageUrl) { UseShellExecute = true });
         }
 
         private void menuCreateShortcut_Click(object sender, EventArgs e)
