@@ -13,6 +13,7 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private bool _isValidating;
         private int _totalM3u8Segments;
         private int _m3u8SegmentsOpened;
         private M3u8ContentType _m3u8ContentType;
@@ -32,7 +33,7 @@ namespace FFmpegAssistant
         /// Severity of a status message, used to color-code <see cref="txtStatus"/>
         /// when <see cref="AppSettings.ColorCodedStatusMessages"/> is enabled.
         /// </summary>
-        private enum StatusLevel { Info, Success, Warning, Error }
+        private enum StatusLevel { Info, Success, Warning, Error, InProgress }
 
         private enum EstimationMode { Stable, CurrentSpeed }
 
@@ -51,6 +52,18 @@ namespace FFmpegAssistant
         /// </summary>
         private const bool AdjustedFeedback = true;
         private readonly Queue<double> _speedSamples = new();
+
+        /// <summary>
+        /// The progress bar and estimated-remaining-time label cover the download and the
+        /// post-download validation decode as one continuous 0-100% pass, not two separate
+        /// ones — otherwise the countdown would hit zero and then restart once validation
+        /// begins. Download fills 0-<see cref="DownloadPhaseWeightPercent"/>%; validation
+        /// fills the rest. Before validation actually starts (and reports its own live
+        /// progress), its remaining time is only a rough guess: total video duration divided
+        /// by <see cref="ValidationSpeedEstimateDivisor"/>.
+        /// </summary>
+        private const int DownloadPhaseWeightPercent = 95;
+        private const double ValidationSpeedEstimateDivisor = 30.0;
 
         private static readonly Regex DurationPattern =
             new(@"Duration:\s*(\d{2}):(\d{2}):(\d{2})\.(\d+)", RegexOptions.Compiled);
@@ -267,6 +280,7 @@ namespace FFmpegAssistant
         {
             _totalDuration = TimeSpan.Zero;
             _progressStarted = false;
+            _isValidating = false;
             _m3u8SegmentsOpened = 0;
             _speedSamples.Clear();
             foreach (DataGridViewRow row in dgvProgress.Rows)
@@ -286,6 +300,8 @@ namespace FFmpegAssistant
                     StatusLevel.Success => Color.Green,
                     StatusLevel.Warning => Color.Orange,
                     StatusLevel.Error => Color.Red,
+                    // A pure yellow reads poorly on the white status box, so use a darker gold instead.
+                    StatusLevel.InProgress => Color.DarkGoldenrod,
                     _ => SystemColors.WindowText,
                 }
                 : SystemColors.WindowText;
@@ -409,16 +425,33 @@ namespace FFmpegAssistant
 
             if (_totalDuration > TimeSpan.Zero && TimeSpan.TryParse(time, out var current))
             {
-                percent = Math.Min((int)(current.TotalSeconds / _totalDuration.TotalSeconds * 100), 100);
+                int phasePercent = Math.Min((int)(current.TotalSeconds / _totalDuration.TotalSeconds * 100), 100);
 
                 double effectiveSpeed = SpeedMode == EstimationMode.Stable
                     ? (_speedSamples.Count > 0 ? _speedSamples.Min() : currentSpeed)
                     : currentSpeed;
 
-                if (effectiveSpeed > 0 && current.TotalSeconds > 0)
+                double? phaseRemainingSecs = effectiveSpeed > 0 && current.TotalSeconds > 0
+                    ? (_totalDuration.TotalSeconds - current.TotalSeconds) / effectiveSpeed
+                    : null;
+
+                if (_isValidating)
                 {
-                    double remainingSecs = (_totalDuration.TotalSeconds - current.TotalSeconds) / effectiveSpeed;
-                    estimatedRemaining = TimeSpan.FromSeconds(remainingSecs).ToString(@"h\:mm\:ss");
+                    // Last slice of the bar; validation's own live progress drives the estimate directly.
+                    percent = DownloadPhaseWeightPercent + phasePercent * (100 - DownloadPhaseWeightPercent) / 100;
+                    if (phaseRemainingSecs.HasValue)
+                        estimatedRemaining = TimeSpan.FromSeconds(phaseRemainingSecs.Value).ToString(@"h\:mm\:ss");
+                }
+                else
+                {
+                    // First slice of the bar; pad the estimate with a rough guess for the
+                    // validation pass still to come (see DownloadPhaseWeightPercent).
+                    percent = phasePercent * DownloadPhaseWeightPercent / 100;
+                    if (phaseRemainingSecs.HasValue)
+                    {
+                        double estimatedValidationSecs = _totalDuration.TotalSeconds / ValidationSpeedEstimateDivisor;
+                        estimatedRemaining = TimeSpan.FromSeconds(phaseRemainingSecs.Value + estimatedValidationSecs).ToString(@"h\:mm\:ss");
+                    }
                 }
             }
 
@@ -798,11 +831,20 @@ namespace FFmpegAssistant
                             continue;
                         }
 
-                        SetStatus("Validating downloaded file...");
+                        SetStatus("Validating downloaded file...", StatusLevel.InProgress);
+
+                        // Validation continues the same progress bar/estimate rather than starting
+                        // a second 0-100% pass (see DownloadPhaseWeightPercent). Its decode speed
+                        // differs a lot from the download/copy that just finished, so the speed
+                        // samples are cleared to avoid skewing the validation-phase estimate.
+                        _isValidating = true;
+                        _speedSamples.Clear();
+                        progressBar.Value = DownloadPhaseWeightPercent;
+                        TaskbarProgress.SetNormal(this, DownloadPhaseWeightPercent, 100);
 
                         // In normal mode validate the part file; in watch mode validate the final file
                         string validatePath = watchMode ? outputPath : partPath;
-                        bool valid = await ValidateVideoFileAsync(validatePath);
+                        bool valid = await ValidateVideoFileAsync(validatePath, logFile, _cts.Token);
                         if (valid)
                         {
                             // In normal mode: rename the (part) file to the final name now that it's verified
@@ -1411,33 +1453,22 @@ namespace FFmpegAssistant
         // -------------------------------------------------------------------------
 
         /// <summary>
-        /// Validates a video file by running FFmpeg over it and checking for decode errors.
+        /// Validates a video file by fully decoding it with FFmpeg and checking for decode errors.
+        /// Runs through <see cref="RunFfmpegAsync"/> (default verbosity, not "-v error") so the
+        /// existing progress parsing drives the progress bar and estimated-remaining-time label
+        /// during the decode, instead of the check running silently in the background.
         /// Returns true if the file is OK, false if it is corrupted or unreadable.
         /// </summary>
-        private static async Task<bool> ValidateVideoFileAsync(string filePath)
+        private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
                 return false;
 
-            var psi = new ProcessStartInfo(
-                AppSettings.GetFfmpegExe(),
-                $"-v error -i \"{filePath}\" -f null -")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
             try
             {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                string stderr = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                // Any output on stderr means FFmpeg found decode errors
-                return string.IsNullOrWhiteSpace(stderr);
+                var (exitCode, errorLines) = await RunFfmpegAsync(
+                    $"-i \"{filePath}\" -f null -", logFile, cancellationToken);
+                return exitCode == 0 && errorLines.Count == 0;
             }
             catch
             {
