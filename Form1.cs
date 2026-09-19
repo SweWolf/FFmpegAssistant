@@ -20,6 +20,7 @@ namespace FFmpegAssistant
         private bool _closeAfterCancel;
         private bool _commandSetByExtractFeature;
         private bool _settingExtractCommand;
+        private string? _folderTextOnFocus;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -95,7 +96,12 @@ namespace FFmpegAssistant
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
-            cboFolder.Leave += (s, _) => SuggestNextEpisode(cboFolder.Text);
+            cboFolder.Enter += (s, _) => _folderTextOnFocus = cboFolder.Text;
+            cboFolder.Leave += (s, _) =>
+            {
+                if (!string.Equals(cboFolder.Text, _folderTextOnFocus, StringComparison.Ordinal))
+                    SuggestNextEpisode(cboFolder.Text);
+            };
 
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
@@ -133,7 +139,15 @@ namespace FFmpegAssistant
                     return;
                 }
                 if (cmd.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase) && cmd.Length > 30)
+                {
+                    if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
+                    {
+                        string? outFile = GetCommandOutputFilename(cmd);
+                        if (outFile != null)
+                            txtFileName.Text = outFile;
+                    }
                     TryApplyTvShowHistory(cmd);
+                }
             };
             // Also trigger when the box loses focus (catches manual edits)
             txtOriginalCommand.Leave += (s, _) => TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
@@ -151,7 +165,11 @@ namespace FFmpegAssistant
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
             string? startup = _startupCommand;
             if (startup == null && Clipboard.ContainsText())
-                startup = Clipboard.GetText().Trim();
+            {
+                string clip = Clipboard.GetText().Trim();
+                if (clip.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                    startup = clip;
+            }
 
             if (startup != null)
             {
@@ -164,6 +182,8 @@ namespace FFmpegAssistant
                 else if (startup.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
                 {
                     txtOriginalCommand.Text = startup;
+                    if (_startupCommand == null) // came from clipboard — place cursor at start, don't select all
+                        BeginInvoke(() => { txtOriginalCommand.SelectionStart = 0; txtOriginalCommand.SelectionLength = 0; });
                     // Defer until after the form is fully shown so the ComboBox updates correctly
                     BeginInvoke(() => TryApplyTvShowHistory(startup));
                 }
@@ -992,6 +1012,8 @@ namespace FFmpegAssistant
             txtEpisode.Visible = false;
             txtSeason.Text = "";
             txtEpisode.Text = "";
+
+            txtOriginalCommand.Focus();
         }
 
         private void btnOpenFolder_Click_1(object sender, EventArgs e)
@@ -1461,11 +1483,24 @@ namespace FFmpegAssistant
         // Episode suggestion
         // -------------------------------------------------------------------------
 
+        private void SyncShowNameToFolder(string folder)
+        {
+            string folderShowName = Path.GetFileName(folder);
+            if (string.IsNullOrEmpty(folderShowName)) return;
+            var cur = EpisodePattern.Match(txtFileName.Text.Trim());
+            if (!cur.Success) return;
+            if (!cur.Groups[1].Value.Equals(folderShowName, StringComparison.OrdinalIgnoreCase))
+                txtFileName.Text = $"{folderShowName} - s{cur.Groups[2].Value}e{cur.Groups[3].Value}{cur.Groups[4].Value}";
+        }
+
         private void SuggestNextEpisode(string folder)
         {
             if (_commandSetByExtractFeature) return;
             if (!Directory.Exists(folder))
+            {
+                SyncShowNameToFolder(folder);
                 return;
+            }
 
             // Only scan files whose extension matches the command's output extension so that
             // e.g. extracting s01e01.srt from a folder of .mp4 files finds no .srt episodes
@@ -1482,7 +1517,10 @@ namespace FFmpegAssistant
                 .ToList();
 
             if (matches.Count == 0)
+            {
+                SyncShowNameToFolder(folder);
                 return;
+            }
 
             var last = matches.Last();
             string showName = last.Groups[1].Value;
@@ -1606,9 +1644,18 @@ namespace FFmpegAssistant
             {
                 string current = txtFileName.Text.Trim();
                 if (string.IsNullOrEmpty(current)) return;
-                showName = Path.GetFileNameWithoutExtension(current);
                 ext = Path.GetExtension(current);
-                if (string.IsNullOrEmpty(showName)) return;
+                if (string.IsNullOrEmpty(ext)) return;
+                // Prefer the folder's show-folder name (includes year if user added it)
+                string folderName = Path.GetFileName(cboFolder.Text.Trim());
+                if (!string.IsNullOrEmpty(folderName))
+                    showName = folderName;
+                else
+                {
+                    string? extracted = ExtractShowName(txtOriginalCommand.Text.Trim());
+                    if (extracted == null) return;
+                    showName = extracted;
+                }
             }
 
             string seasonStr = season.ToString().PadLeft(seasonDigits, '0');
@@ -1630,6 +1677,12 @@ namespace FFmpegAssistant
                 if (!cboFolder.Items.Contains(showFolder))
                     cboFolder.Items.Add(showFolder);
                 cboFolder.SelectedItem = showFolder;
+                if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
+                {
+                    string? outFile = GetCommandOutputFilename(originalCommand);
+                    if (outFile != null)
+                        txtFileName.Text = outFile;
+                }
                 SuggestNextEpisode(showFolder);
             }
 
@@ -1646,6 +1699,28 @@ namespace FFmpegAssistant
         /// Strips everything from the first '-' or '[' delimiter onwards.
         /// Returns null if no name could be extracted.
         /// </summary>
+        private static readonly string[] OutputFileExtensions =
+            { ".mp4", ".mkv", ".avi", ".mov", ".ts", ".m2ts", ".wmv", ".srt", ".ass", ".vtt", ".mp3", ".m4a", ".aac" };
+
+        private static string? GetCommandOutputFilename(string command)
+        {
+            var quoted = Regex.Match(command, @"""([^""]+)""\s*$");
+            if (quoted.Success)
+            {
+                string name = Path.GetFileName(quoted.Groups[1].Value.Trim());
+                if (OutputFileExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+                    return name;
+            }
+            var unquoted = Regex.Match(command, @"(\S+)\s*$");
+            if (unquoted.Success)
+            {
+                string name = Path.GetFileName(unquoted.Groups[1].Value);
+                if (OutputFileExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+                    return name;
+            }
+            return null;
+        }
+
         private static string? ExtractShowName(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return null;

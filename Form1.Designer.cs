@@ -124,9 +124,9 @@ namespace FFmpegAssistant
             label1.Font = new Font("Segoe UI", 12F);
             label1.Location = new Point(12, 33);
             label1.Name = "label1";
-            label1.Size = new Size(143, 21);
+            label1.Size = new Size(83, 21);
             label1.TabIndex = 4;
-            label1.Text = "Original Command";
+            label1.Text = "Command";
             // 
             // label2
             // 
@@ -360,7 +360,7 @@ namespace FFmpegAssistant
             groupBox1.Location = new Point(14, 111);
             groupBox1.Name = "groupBox1";
             groupBox1.Size = new Size(621, 114);
-            groupBox1.TabIndex = 16;
+            groupBox1.TabIndex = 1;
             groupBox1.TabStop = false;
             groupBox1.Text = "Auto suggest folder and file name";
             // 
