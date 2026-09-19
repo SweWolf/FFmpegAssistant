@@ -56,7 +56,7 @@ namespace FFmpegAssistant
             menuNewVersion = new ToolStripMenuItem();
             btnClear = new Button();
             label4 = new Label();
-            txtStatus = new TextBox();
+            txtStatus = new Label();
             groupBox1 = new GroupBox();
             lblEpisode = new Label();
             txtEpisode = new TextBox();
@@ -336,17 +336,21 @@ namespace FFmpegAssistant
             label4.Size = new Size(47, 19);
             label4.TabIndex = 14;
             label4.Text = "Status";
-            // 
+            //
             // txtStatus
-            // 
+            // Label, not TextBox: under net10.0-windows WinForms, TextBox.ReadOnly ignores ForeColor,
+            // which breaks SetStatus's color-coding. Styled here to still look like a status textbox.
+            //
             txtStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            txtStatus.AutoSize = false;
+            txtStatus.BackColor = SystemColors.Window;
             txtStatus.BorderStyle = BorderStyle.FixedSingle;
             txtStatus.Location = new Point(67, 716);
             txtStatus.Name = "txtStatus";
-            txtStatus.ReadOnly = true;
+            txtStatus.Padding = new Padding(5, 0, 0, 0);
             txtStatus.Size = new Size(824, 23);
             txtStatus.TabIndex = 9;
-            txtStatus.TabStop = false;
+            txtStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // groupBox1
             // 
@@ -539,7 +543,7 @@ namespace FFmpegAssistant
         private Label lblEstimatedRemaining;
         private Button btnClear;
         private Label label4;
-        private TextBox txtStatus;
+        private Label txtStatus;
         private GroupBox groupBox1;
         private Button btnMovie;
         private Label label5;

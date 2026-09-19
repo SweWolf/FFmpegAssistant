@@ -249,6 +249,50 @@ namespace FFmpegAssistant
             }
         }
 
+        // -------------------------------------------------------------------------
+        // Color-coded status messages: "Yes" (default) | "No"
+        // Prepared for a future settings-form toggle; no UI control yet.
+        // -------------------------------------------------------------------------
+
+        private static readonly string ColorCodedStatusMessagesFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "color-coded-status-messages.txt");
+
+        private static bool? _cachedColorCodedStatusMessages;
+
+        public static bool ColorCodedStatusMessages
+        {
+            get
+            {
+                if (_cachedColorCodedStatusMessages.HasValue) return _cachedColorCodedStatusMessages.Value;
+                try
+                {
+                    if (File.Exists(ColorCodedStatusMessagesFile))
+                    {
+                        string v = File.ReadAllText(ColorCodedStatusMessagesFile, System.Text.Encoding.UTF8).Trim();
+                        if (v == "Yes" || v == "No")
+                        {
+                            _cachedColorCodedStatusMessages = v == "Yes";
+                            return _cachedColorCodedStatusMessages.Value;
+                        }
+                    }
+                }
+                catch { }
+                _cachedColorCodedStatusMessages = true;
+                return true;
+            }
+            set
+            {
+                _cachedColorCodedStatusMessages = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ColorCodedStatusMessagesFile)!);
+                    File.WriteAllText(ColorCodedStatusMessagesFile, value ? "Yes" : "No", System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
         /// <summary>
         /// Returns "Yes", "No", or "Ask" (default when no setting has been saved).
         /// </summary>

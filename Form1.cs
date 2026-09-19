@@ -28,6 +28,12 @@ namespace FFmpegAssistant
 
         private enum M3u8ContentType { Unknown, Subtitle, Video }
 
+        /// <summary>
+        /// Severity of a status message, used to color-code <see cref="txtStatus"/>
+        /// when <see cref="AppSettings.ColorCodedStatusMessages"/> is enabled.
+        /// </summary>
+        private enum StatusLevel { Info, Success, Warning, Error }
+
         private enum EstimationMode { Stable, CurrentSpeed }
 
         /// <summary>
@@ -84,7 +90,6 @@ namespace FFmpegAssistant
             if (AppSettings.CheckForUpdatesOnStartup == "Yes")
                 _ = CheckForUpdatesAsync();
 
-            SendMessage(txtStatus.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
             SendMessage(txtAttempt.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
 
             InitializeProgressGrid();
@@ -156,11 +161,16 @@ namespace FFmpegAssistant
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
-                txtStatus.Clear();
+                txtStatus.Text = string.Empty;
+                txtStatus.ForeColor = SystemColors.WindowText;
                 if (!_settingExtractCommand)
                     _commandSetByExtractFeature = false;
             };
-            txtFileName.TextChanged += (s, _) => txtStatus.Clear();
+            txtFileName.TextChanged += (s, _) =>
+            {
+                txtStatus.Text = string.Empty;
+                txtStatus.ForeColor = SystemColors.WindowText;
+            };
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
             string? startup = _startupCommand;
@@ -263,16 +273,34 @@ namespace FFmpegAssistant
                 row.Cells["colValue"].Value = "";
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
-            txtStatus.Clear();
+            txtStatus.Text = string.Empty;
+            txtStatus.ForeColor = SystemColors.WindowText;
             TaskbarProgress.Clear(this);
         }
 
-        private void SetStatus(string message)
+        private void SetStatus(string message, StatusLevel level = StatusLevel.Info)
         {
+            Color color = AppSettings.ColorCodedStatusMessages
+                ? level switch
+                {
+                    StatusLevel.Success => Color.Green,
+                    StatusLevel.Warning => Color.Orange,
+                    StatusLevel.Error => Color.Red,
+                    _ => SystemColors.WindowText,
+                }
+                : SystemColors.WindowText;
+
             if (InvokeRequired)
-                Invoke(() => txtStatus.Text = message);
+                Invoke(() =>
+                {
+                    txtStatus.ForeColor = color;
+                    txtStatus.Text = message;
+                });
             else
+            {
+                txtStatus.ForeColor = color;
                 txtStatus.Text = message;
+            }
         }
 
         /// <summary>
@@ -698,12 +726,12 @@ namespace FFmpegAssistant
                         {
                             try { if (File.Exists(downloadPath)) File.Delete(downloadPath); } catch { }
                             WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} after exit code {exitCode}");
-                            SetStatus($"Download failed — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                            SetStatus($"Download failed — retrying (attempt {attempt + 1} of {maxAttempts})...", StatusLevel.Warning);
                             keepTrying = true;
                         }
                         else
                         {
-                            SetStatus("Download failed — an error occurred.");
+                            SetStatus("Download failed — an error occurred.", StatusLevel.Error);
                             MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             LogError(fileName, message, logFile);
                         }
@@ -733,7 +761,7 @@ namespace FFmpegAssistant
                             else
                             {
                                 WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
-                                SetStatus("Conversion failed — .ts file kept.");
+                                SetStatus("Conversion failed — .ts file kept.", StatusLevel.Error);
                                 return;
                             }
                         }
@@ -765,7 +793,7 @@ namespace FFmpegAssistant
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
-                            SetStatus("Done");
+                            SetStatus("Done", StatusLevel.Success);
                             NotifyDownloadFinished();
                             continue;
                         }
@@ -792,7 +820,7 @@ namespace FFmpegAssistant
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
-                            SetStatus("Done");
+                            SetStatus("Done", StatusLevel.Success);
                             NotifyDownloadFinished();
                         }
                         else
@@ -805,7 +833,7 @@ namespace FFmpegAssistant
                             {
                                 try { if (File.Exists(validatePath)) File.Delete(validatePath); } catch { }
                                 WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} — corrupted file");
-                                SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                                SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...", StatusLevel.Warning);
                                 keepTrying = true;
                             }
                             else
@@ -839,12 +867,12 @@ namespace FFmpegAssistant
                                     }
                                     else
                                     {
-                                        SetStatus("Downloaded file corrupted — file deleted.");
+                                        SetStatus("Downloaded file corrupted — file deleted.", StatusLevel.Error);
                                     }
                                 }
                                 else
                                 {
-                                    SetStatus("Downloaded file corrupted.");
+                                    SetStatus("Downloaded file corrupted.", StatusLevel.Error);
                                 }
                             }
                         }
@@ -932,17 +960,17 @@ namespace FFmpegAssistant
                             AppSettings.SetFfmpegExe(ofd.FileName);
                             WriteAppLog($"CONFIG   : ffmpeg path set to {ofd.FileName}");
                             keepTrying = true;
-                            SetStatus("Retrying with located FFmpeg...");
+                            SetStatus("Retrying with located FFmpeg...", StatusLevel.Warning);
                         }
                         else
                         {
-                            SetStatus("FFmpeg not found — download cancelled.");
+                            SetStatus("FFmpeg not found — download cancelled.", StatusLevel.Error);
                             LogError(fileName, "FFmpeg executable not found", logFile);
                         }
                     }
                     else
                     {
-                        SetStatus("FFmpeg not found — download cancelled.");
+                        SetStatus("FFmpeg not found — download cancelled.", StatusLevel.Error);
                         LogError(fileName, "FFmpeg executable not found", logFile);
                     }
                 }
@@ -952,7 +980,7 @@ namespace FFmpegAssistant
                     progressBar.Value = 0;
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     TaskbarProgress.SetError(this, 100, 100);
-                    SetStatus($"Error: {ex.Message}");
+                    SetStatus($"Error: {ex.Message}", StatusLevel.Error);
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
                     MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     LogError(fileName, message, logFile);
