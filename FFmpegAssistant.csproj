@@ -20,6 +20,9 @@
     <Content Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.png" />
+    <Content Include="Resources\*.wav">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

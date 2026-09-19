@@ -255,6 +255,28 @@ namespace FFmpegAssistant
                 txtStatus.Text = message;
         }
 
+        /// <summary>
+        /// Reacts to a finished download per the "Action When Download Finished" setting:
+        /// play a sound, show the "Done!" message box, or do nothing (status already shows "Done").
+        /// Skipped entirely if the user already asked to close the application.
+        /// </summary>
+        private void NotifyDownloadFinished()
+        {
+            if (_closeAfterCancel) return;
+
+            switch (AppSettings.ActionWhenDownloadFinished)
+            {
+                case "Message Box":
+                    MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "None":
+                    break;
+                default: // "Play a Sound"
+                    SoundLibrary.Play(AppSettings.FinishedDownloadSoundFile);
+                    break;
+            }
+        }
+
         // -------------------------------------------------------------------------
         // FFmpeg output parsing
         // -------------------------------------------------------------------------
@@ -724,8 +746,7 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done");
-                            if (!_closeAfterCancel)
-                                MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            NotifyDownloadFinished();
                             continue;
                         }
 
@@ -752,9 +773,7 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done");
-                            // Skip the popup if the user already asked to close the application
-                            if (!_closeAfterCancel)
-                                MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            NotifyDownloadFinished();
                         }
                         else
                         {

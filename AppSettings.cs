@@ -167,6 +167,88 @@ namespace FFmpegAssistant
             }
         }
 
+        // -------------------------------------------------------------------------
+        // Action to take when a download finishes: "Play a Sound" (default) | "Message Box" | "None"
+        // -------------------------------------------------------------------------
+
+        private static readonly string DownloadFinishedActionFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "download-finished-action.txt");
+
+        private static string? _cachedDownloadFinishedAction;
+
+        public static string ActionWhenDownloadFinished
+        {
+            get
+            {
+                if (_cachedDownloadFinishedAction != null) return _cachedDownloadFinishedAction;
+                try
+                {
+                    if (File.Exists(DownloadFinishedActionFile))
+                    {
+                        string v = File.ReadAllText(DownloadFinishedActionFile, System.Text.Encoding.UTF8).Trim();
+                        if (v == "Play a Sound" || v == "Message Box" || v == "None")
+                        {
+                            _cachedDownloadFinishedAction = v;
+                            return v;
+                        }
+                    }
+                }
+                catch { }
+                _cachedDownloadFinishedAction = "Play a Sound";
+                return _cachedDownloadFinishedAction;
+            }
+            set
+            {
+                _cachedDownloadFinishedAction = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(DownloadFinishedActionFile)!);
+                    File.WriteAllText(DownloadFinishedActionFile, value, System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
+        // -------------------------------------------------------------------------
+        // Sound file (Resources\*.wav) used when ActionWhenDownloadFinished == "Play a Sound"
+        // -------------------------------------------------------------------------
+
+        private static readonly string DownloadFinishedSoundFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "download-finished-sound.txt");
+
+        private static string? _cachedDownloadFinishedSound;
+
+        public static string FinishedDownloadSoundFile
+        {
+            get
+            {
+                if (_cachedDownloadFinishedSound != null) return _cachedDownloadFinishedSound;
+                try
+                {
+                    if (File.Exists(DownloadFinishedSoundFile))
+                    {
+                        _cachedDownloadFinishedSound = File.ReadAllText(DownloadFinishedSoundFile, System.Text.Encoding.UTF8).Trim();
+                        return _cachedDownloadFinishedSound;
+                    }
+                }
+                catch { }
+                _cachedDownloadFinishedSound = string.Empty;
+                return _cachedDownloadFinishedSound;
+            }
+            set
+            {
+                _cachedDownloadFinishedSound = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(DownloadFinishedSoundFile)!);
+                    File.WriteAllText(DownloadFinishedSoundFile, value, System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
         /// <summary>
         /// Returns "Yes", "No", or "Ask" (default when no setting has been saved).
         /// </summary>

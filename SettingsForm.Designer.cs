@@ -29,9 +29,19 @@ namespace FFmpegAssistant
             groupBox3 = new GroupBox();
             cboNewVersionCheck = new ComboBox();
             label4 = new Label();
+            groupBox1 = new GroupBox();
+            cmdPlayActionSound = new Button();
+            cboFinishedDownlaodSound = new ComboBox();
+            lblFinishedDownlaodSound = new Label();
+            label1 = new Label();
+            cboActionWhenDownloadFinished = new ComboBox();
+            label5 = new Label();
+            txtCustomActionSoundFile = new TextBox();
+            btnBrowseForCustomSoundFile = new Button();
             grpFfmpeg.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
+            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // grpFfmpeg
@@ -88,7 +98,7 @@ namespace FFmpegAssistant
             // btnOK
             // 
             btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnOK.Location = new Point(326, 519);
+            btnOK.Location = new Point(326, 651);
             btnOK.Name = "btnOK";
             btnOK.Size = new Size(75, 27);
             btnOK.TabIndex = 7;
@@ -100,7 +110,7 @@ namespace FFmpegAssistant
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(407, 519);
+            btnCancel.Location = new Point(407, 651);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(75, 27);
             btnCancel.TabIndex = 8;
@@ -151,7 +161,7 @@ namespace FFmpegAssistant
             // 
             groupBox3.Controls.Add(cboNewVersionCheck);
             groupBox3.Controls.Add(label4);
-            groupBox3.Location = new Point(12, 405);
+            groupBox3.Location = new Point(12, 522);
             groupBox3.Name = "groupBox3";
             groupBox3.Size = new Size(470, 89);
             groupBox3.TabIndex = 6;
@@ -177,14 +187,108 @@ namespace FFmpegAssistant
             label4.TabIndex = 0;
             label4.Text = "Check for new version at startup";
             // 
+            // groupBox1
+            // 
+            groupBox1.Controls.Add(btnBrowseForCustomSoundFile);
+            groupBox1.Controls.Add(txtCustomActionSoundFile);
+            groupBox1.Controls.Add(label5);
+            groupBox1.Controls.Add(cmdPlayActionSound);
+            groupBox1.Controls.Add(cboFinishedDownlaodSound);
+            groupBox1.Controls.Add(lblFinishedDownlaodSound);
+            groupBox1.Controls.Add(label1);
+            groupBox1.Controls.Add(cboActionWhenDownloadFinished);
+            groupBox1.Location = new Point(9, 265);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(472, 224);
+            groupBox1.TabIndex = 4;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Action When Download Finished";
+            // 
+            // cmdPlayActionSound
+            // 
+            cmdPlayActionSound.Location = new Point(386, 110);
+            cmdPlayActionSound.Name = "cmdPlayActionSound";
+            cmdPlayActionSound.Size = new Size(27, 23);
+            cmdPlayActionSound.TabIndex = 2;
+            cmdPlayActionSound.Text = "▶";
+            cmdPlayActionSound.UseVisualStyleBackColor = true;
+            cmdPlayActionSound.Visible = false;
+            // 
+            // cboFinishedDownlaodSound
+            // 
+            cboFinishedDownlaodSound.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboFinishedDownlaodSound.FormattingEnabled = true;
+            cboFinishedDownlaodSound.Location = new Point(12, 110);
+            cboFinishedDownlaodSound.Name = "cboFinishedDownlaodSound";
+            cboFinishedDownlaodSound.Size = new Size(360, 23);
+            cboFinishedDownlaodSound.TabIndex = 1;
+            cboFinishedDownlaodSound.Visible = false;
+            // 
+            // lblFinishedDownlaodSound
+            // 
+            lblFinishedDownlaodSound.AutoSize = true;
+            lblFinishedDownlaodSound.Location = new Point(13, 90);
+            lblFinishedDownlaodSound.Name = "lblFinishedDownlaodSound";
+            lblFinishedDownlaodSound.Size = new Size(41, 15);
+            lblFinishedDownlaodSound.TabIndex = 2;
+            lblFinishedDownlaodSound.Text = "Sound";
+            lblFinishedDownlaodSound.Visible = false;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Location = new Point(13, 29);
+            label1.Name = "label1";
+            label1.Size = new Size(42, 15);
+            label1.TabIndex = 1;
+            label1.Text = "Action";
+            // 
+            // cboActionWhenDownloadFinished
+            // 
+            cboActionWhenDownloadFinished.FormattingEnabled = true;
+            cboActionWhenDownloadFinished.Items.AddRange(new object[] { "Play a Sound", "Message Box", "None" });
+            cboActionWhenDownloadFinished.Location = new Point(13, 47);
+            cboActionWhenDownloadFinished.Name = "cboActionWhenDownloadFinished";
+            cboActionWhenDownloadFinished.Size = new Size(359, 23);
+            cboActionWhenDownloadFinished.TabIndex = 0;
+            // 
+            // label5
+            // 
+            label5.AutoSize = true;
+            label5.Location = new Point(13, 150);
+            label5.Name = "label5";
+            label5.Size = new Size(107, 15);
+            label5.TabIndex = 5;
+            label5.Text = "Custom Sound File";
+            label5.Visible = false;
+            // 
+            // txtCustomActionSoundFile
+            // 
+            txtCustomActionSoundFile.Location = new Point(12, 168);
+            txtCustomActionSoundFile.Name = "txtCustomActionSoundFile";
+            txtCustomActionSoundFile.Size = new Size(362, 23);
+            txtCustomActionSoundFile.TabIndex = 3;
+            txtCustomActionSoundFile.Visible = false;
+            // 
+            // btnBrowseForCustomSoundFile
+            // 
+            btnBrowseForCustomSoundFile.Location = new Point(386, 168);
+            btnBrowseForCustomSoundFile.Name = "btnBrowseForCustomSoundFile";
+            btnBrowseForCustomSoundFile.Size = new Size(27, 23);
+            btnBrowseForCustomSoundFile.TabIndex = 4;
+            btnBrowseForCustomSoundFile.Text = "...";
+            btnBrowseForCustomSoundFile.UseVisualStyleBackColor = true;
+            btnBrowseForCustomSoundFile.Visible = false;
+            // 
             // SettingsForm
             // 
             AcceptButton = btnOK;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(494, 558);
+            ClientSize = new Size(494, 690);
             ControlBox = false;
+            Controls.Add(groupBox1);
             Controls.Add(groupBox3);
             Controls.Add(groupBox2);
             Controls.Add(grpFfmpeg);
@@ -203,6 +307,8 @@ namespace FFmpegAssistant
             groupBox2.PerformLayout();
             groupBox3.ResumeLayout(false);
             groupBox3.PerformLayout();
+            groupBox1.ResumeLayout(false);
+            groupBox1.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -222,5 +328,14 @@ namespace FFmpegAssistant
         private GroupBox groupBox3;
         private ComboBox cboNewVersionCheck;
         private Label label4;
+        private GroupBox groupBox1;
+        private Label label1;
+        private ComboBox cboActionWhenDownloadFinished;
+        private ComboBox cboFinishedDownlaodSound;
+        private Label lblFinishedDownlaodSound;
+        private Button cmdPlayActionSound;
+        private Button btnBrowseForCustomSoundFile;
+        private TextBox txtCustomActionSoundFile;
+        private Label label5;
     }
 }
