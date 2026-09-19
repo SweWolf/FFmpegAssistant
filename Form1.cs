@@ -1577,22 +1577,42 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Rebuilds the filename using the current Season and Episode box values,
-        /// overriding whatever the folder scan suggested. Does nothing if the
-        /// current filename does not match the TV-show naming pattern, or if
-        /// either box is empty / contains a non-positive number.
+        /// overriding whatever the folder scan suggested. If the current filename doesn't
+        /// already match the TV-show naming pattern — e.g. this is the very first episode
+        /// of a show, so there was no prior file for the folder scan to seed it from — the
+        /// show name and extension are derived from the current filename instead, with the
+        /// season/episode numbers defaulting to two digits. Does nothing if the filename is
+        /// empty, or either box is empty / contains a non-positive number.
         /// </summary>
         private void UpdateFileNameFromSeasonEpisode()
         {
-            var m = EpisodePattern.Match(txtFileName.Text);
-            if (!m.Success) return;
-
             if (!int.TryParse(txtSeason.Text, out int season) || season < 1) return;
             if (!int.TryParse(txtEpisode.Text, out int episode) || episode < 1) return;
 
-            string showName = m.Groups[1].Value;
-            string ext = m.Groups[4].Value;
-            string seasonStr = season.ToString().PadLeft(m.Groups[2].Length, '0');
-            string episodeStr = episode.ToString().PadLeft(m.Groups[3].Length, '0');
+            string showName;
+            string ext;
+            int seasonDigits = 2;
+            int episodeDigits = 2;
+
+            var m = EpisodePattern.Match(txtFileName.Text);
+            if (m.Success)
+            {
+                showName = m.Groups[1].Value;
+                ext = m.Groups[4].Value;
+                seasonDigits = m.Groups[2].Length;
+                episodeDigits = m.Groups[3].Length;
+            }
+            else
+            {
+                string current = txtFileName.Text.Trim();
+                if (string.IsNullOrEmpty(current)) return;
+                showName = Path.GetFileNameWithoutExtension(current);
+                ext = Path.GetExtension(current);
+                if (string.IsNullOrEmpty(showName)) return;
+            }
+
+            string seasonStr = season.ToString().PadLeft(seasonDigits, '0');
+            string episodeStr = episode.ToString().PadLeft(episodeDigits, '0');
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
         }
