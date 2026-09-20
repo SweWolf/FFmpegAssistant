@@ -628,39 +628,6 @@ namespace FFmpegAssistant
                 txtFileName.Text = fileName;
             }
 
-            /* This part of the code is removed since the project "Privatkopiera" now supports selecting audio track
-            // Handle "audio_qas" (Swedish voice-over track) according to the user's setting
-            if (originalCommand.Contains("audio_qas", StringComparison.OrdinalIgnoreCase))
-            {
-                string replaceQas = AppSettings.ReplaceAudioQas;
-
-                if (replaceQas == "Yes")
-                {
-                    originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
-                    txtOriginalCommand.Text = originalCommand;
-                }
-                else if (replaceQas == "Ask")
-                {
-                    var answer = MessageBox.Show(
-                        "The command contains the text \"audio_qas\".\n\n" +
-                        "Do you want to replace it with \"audio_eng\"?\n" +
-                        "(Recommended — \"audio_qas\" is most likely a Swedish voice-over.)",
-                        "audio_qas Detected",
-                        MessageBoxButtons.YesNoCancel,
-                        MessageBoxIcon.Question);
-
-                    if (answer == DialogResult.Cancel)
-                        return;
-
-                    if (answer == DialogResult.Yes)
-                    {
-                        originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
-                        txtOriginalCommand.Text = originalCommand;
-                    }
-                }
-                // "No" → skip silently
-            }*/
-
             Directory.CreateDirectory(folder);
 
             // Save TV show history so the folder is auto-suggested next time

@@ -12,7 +12,6 @@ namespace FFmpegAssistant
         private void SettingsForm_Load(object sender, EventArgs e)
         {
             txtFfmpegPath.Text = AppSettings.FfmpegExePath ?? string.Empty;
-            //cboReplaceQas.SelectedItem = AppSettings.ReplaceAudioQas;
             txtNumberOfDownloadAttempts.Text = AppSettings.NumberOfDownloadAttempts.ToString();
             cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
 
@@ -154,8 +153,6 @@ namespace FFmpegAssistant
                 AppSettings.ClearFfmpegExe();
             else
                 AppSettings.SetFfmpegExe(path);
-
-            //AppSettings.ReplaceAudioQas = cboReplaceQas.SelectedItem?.ToString() ?? "Ask";
 
             string attemptsText = txtNumberOfDownloadAttempts.Text.Trim();
             AppSettings.NumberOfDownloadAttempts = int.TryParse(attemptsText, out int attempts) ? attempts : 1;

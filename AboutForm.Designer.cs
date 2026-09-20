@@ -29,6 +29,7 @@ namespace FFmpegAssistant
             lnkGitHub = new LinkLabel();
             lblBuiltWithHeader = new Label();
             lblBuiltWith = new Label();
+            lnkPixabayCredit = new LinkLabel();
             btnClose = new Button();
             pnlHeader.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)picIcon).BeginInit();
@@ -99,11 +100,12 @@ namespace FFmpegAssistant
             pnlContent.Controls.Add(lnkGitHub);
             pnlContent.Controls.Add(lblBuiltWithHeader);
             pnlContent.Controls.Add(lblBuiltWith);
+            pnlContent.Controls.Add(lnkPixabayCredit);
             pnlContent.Controls.Add(btnClose);
             pnlContent.Dock = DockStyle.Fill;
             pnlContent.Location = new Point(0, 105);
             pnlContent.Name = "pnlContent";
-            pnlContent.Size = new Size(440, 330);
+            pnlContent.Size = new Size(440, 379);
             pnlContent.TabIndex = 1;
             // 
             // grpFfmpeg
@@ -143,7 +145,7 @@ namespace FFmpegAssistant
             lnkFfmpeg.Location = new Point(122, 19);
             lnkFfmpeg.Name = "lnkFfmpeg";
             lnkFfmpeg.Size = new Size(107, 15);
-            lnkFfmpeg.TabIndex = 1;
+            lnkFfmpeg.TabIndex = 2;
             lnkFfmpeg.TabStop = true;
             lnkFfmpeg.Text = "https://ffmpeg.org";
             // 
@@ -184,7 +186,7 @@ namespace FFmpegAssistant
             lnkGitHub.Location = new Point(20, 84);
             lnkGitHub.Name = "lnkGitHub";
             lnkGitHub.Size = new Size(255, 15);
-            lnkGitHub.TabIndex = 2;
+            lnkGitHub.TabIndex = 1;
             lnkGitHub.TabStop = true;
             lnkGitHub.Text = "https://github.com/SweWolf/FFmpegAssistant";
             lnkGitHub.LinkClicked += lnkGitHub_LinkClicked;
@@ -210,6 +212,19 @@ namespace FFmpegAssistant
             lblBuiltWith.TabIndex = 4;
             lblBuiltWith.Text = "• .NET 10 / Windows Forms";
             // 
+            // lnkPixabayCredit
+            // 
+            lnkPixabayCredit.AutoSize = true;
+            lnkPixabayCredit.Font = new Font("Segoe UI", 8F);
+            lnkPixabayCredit.LinkColor = Color.Blue;
+            lnkPixabayCredit.Location = new Point(20, 296);
+            lnkPixabayCredit.Name = "lnkPixabayCredit";
+            lnkPixabayCredit.Size = new Size(271, 13);
+            lnkPixabayCredit.TabIndex = 7;
+            lnkPixabayCredit.TabStop = true;
+            lnkPixabayCredit.Text = "Notification sounds downloaded from pixabay.com";
+            lnkPixabayCredit.LinkClicked += lnkPixabayCredit_LinkClicked;
+            // 
             // btnClose
             // 
             btnClose.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -218,10 +233,10 @@ namespace FFmpegAssistant
             btnClose.FlatStyle = FlatStyle.Flat;
             btnClose.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             btnClose.ForeColor = Color.White;
-            btnClose.Location = new Point(340, 288);
+            btnClose.Location = new Point(340, 337);
             btnClose.Name = "btnClose";
             btnClose.Size = new Size(80, 28);
-            btnClose.TabIndex = 5;
+            btnClose.TabIndex = 0;
             btnClose.Text = "Close";
             btnClose.UseVisualStyleBackColor = false;
             btnClose.Click += btnClose_Click;
@@ -230,7 +245,7 @@ namespace FFmpegAssistant
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(440, 435);
+            ClientSize = new Size(440, 484);
             Controls.Add(pnlContent);
             Controls.Add(pnlHeader);
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -259,6 +274,7 @@ namespace FFmpegAssistant
         private Label lblCopyright;
         private Label lblBuiltWithHeader;
         private Label lblBuiltWith;
+        private LinkLabel lnkPixabayCredit;
         private LinkLabel lnkGitHub;
         private Button btnClose;
         private GroupBox grpFfmpeg;

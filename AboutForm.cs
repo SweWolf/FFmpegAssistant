@@ -88,6 +88,15 @@ public partial class AboutForm : Form
         });
     }
 
+    private void lnkPixabayCredit_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName        = "https://pixabay.com/sound-effects/search/notification/",
+            UseShellExecute = true,
+        });
+    }
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         if (keyData == Keys.Escape) { Close(); return true; }
