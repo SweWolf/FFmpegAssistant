@@ -18,6 +18,7 @@ namespace FFmpegAssistant
         private int _m3u8SegmentsOpened;
         private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
+        private bool _settingCategoryFromAutoDetect;
         private bool _closeAfterCancel;
         private bool _commandSetByExtractFeature;
         private bool _settingExtractCommand;
@@ -229,11 +230,24 @@ namespace FFmpegAssistant
             dgvProgress.DefaultCellStyle.SelectionForeColor = dgvProgress.DefaultCellStyle.ForeColor;
 
             dgvProgress.EnableHeadersVisualStyles = false;
+            dgvProgress.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
             dgvProgress.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(70, 70, 70);
             dgvProgress.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             dgvProgress.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(70, 70, 70);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
+
+            // The default header divider blends into the dark header background — repaint it
+            // brighter so the column split is actually visible, without touching the darker
+            // grid lines used elsewhere in the (light-background) body of the grid.
+            dgvProgress.CellPainting += (s, e) =>
+            {
+                if (e.RowIndex != -1 || e.ColumnIndex != 0 || e.Graphics == null) return;
+                e.Paint(e.CellBounds, DataGridViewPaintParts.All);
+                using var pen = new Pen(Color.FromArgb(150, 150, 150));
+                e.Graphics.DrawLine(pen, e.CellBounds.Right - 1, e.CellBounds.Top + 2, e.CellBounds.Right - 1, e.CellBounds.Bottom - 3);
+                e.Handled = true;
+            };
 
             var colProperty = new DataGridViewTextBoxColumn
             {
@@ -348,8 +362,12 @@ namespace FFmpegAssistant
         private void ProcessOutputLine(string line)
         {
             // M3U8 segment-based progress: count real segment openings vs total from pre-fetched playlist.
-            // Segment type is determined by M3U8 content type detected at pre-fetch time.
+            // Segment type is determined by M3U8 content type detected at pre-fetch time. Only used
+            // while the total duration is still unknown — once FFmpeg reports a Duration, the normal
+            // time-based progress below is reliable and takes over exclusively; otherwise the two would
+            // keep overwriting each other's Time/progress-bar updates as their lines interleave.
             if (_totalM3u8Segments > 0 &&
+                _totalDuration == TimeSpan.Zero &&
                 line.Contains("Opening '", StringComparison.OrdinalIgnoreCase) &&
                 IsRealM3u8Segment(line))
             {
@@ -562,6 +580,17 @@ namespace FFmpegAssistant
             _totalM3u8Segments = m3u8Info.SegmentCount;
             _m3u8SegmentsOpened = 0;
 
+            // The file name may already be non-empty here — e.g. auto-suggested from the Title/TV
+            // Show workflow before we had any way to know this was actually a subtitle stream. Now
+            // that the playlist confirms it, force the extension to .srt regardless of what was
+            // guessed before (a folder/episode-continuation guess has no idea this is a subtitle).
+            if (_m3u8ContentType == M3u8ContentType.Subtitle && !string.IsNullOrEmpty(fileName) &&
+                !fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName = Path.ChangeExtension(fileName, ".srt");
+                txtFileName.Text = fileName;
+            }
+
             if (string.IsNullOrEmpty(fileName))
             {
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
@@ -724,6 +753,7 @@ namespace FFmpegAssistant
                 _lastLogFile = logFile;
                 btnRun.Enabled = false;
                 btnCancel.Enabled = true;
+                btnClear.Enabled = false;
                 btnOpenFile.Enabled = false;
                 btnOpenLogFile.Enabled = false;
 
@@ -1035,6 +1065,7 @@ namespace FFmpegAssistant
                     {
                         btnRun.Enabled = true;
                         btnCancel.Enabled = false;
+                        btnClear.Enabled = true;
                     }
 
                     // If the user closed the window during a download, finish closing now
@@ -1051,6 +1082,7 @@ namespace FFmpegAssistant
         {
             _cts?.Cancel();
             btnCancel.Enabled = false;
+            btnClear.Enabled = true;
         }
 
         private void btnOpenFile_Click_1(object sender, EventArgs e)
@@ -1068,6 +1100,11 @@ namespace FFmpegAssistant
             txtOriginalCommand.Clear();
             cboFolder.SelectedIndex = 0;
             txtFileName.Clear();
+            txtTitle.Clear();
+            txtYear.Clear();
+
+            rdoMovie.Checked = false;
+            rdoTvShow.Checked = false;
 
             ResetProgress();
 
@@ -1552,6 +1589,24 @@ namespace FFmpegAssistant
                 txtFileName.Text = $"{folderShowName} - s{cur.Groups[2].Value}e{cur.Groups[3].Value}{cur.Groups[4].Value}";
         }
 
+        /// <summary>
+        /// Clears the File Name box when it doesn't already belong to showDisplayName — e.g. a
+        /// leftover raw guess from the command's output argument, or an episode name for a
+        /// different show — so that a subsequent <see cref="SuggestNextEpisode"/> call is free
+        /// to fill in the real next-episode name instead of refusing to touch what looks like
+        /// someone else's deliberate filename. Leaves the extract-subtitle feature's filename
+        /// alone, matching SuggestNextEpisode's own guard.
+        /// </summary>
+        private void ClearFileNameIfNotForShow(string showDisplayName)
+        {
+            if (_commandSetByExtractFeature) return;
+
+            var m = EpisodePattern.Match(txtFileName.Text.Trim());
+            bool matchesShow = m.Success && m.Groups[1].Value.Equals(showDisplayName, StringComparison.OrdinalIgnoreCase);
+            if (!matchesShow)
+                txtFileName.Clear();
+        }
+
         private void SuggestNextEpisode(string folder)
         {
             if (_commandSetByExtractFeature) return;
@@ -1613,22 +1668,19 @@ namespace FFmpegAssistant
             _updatingSeasonEpisode = false;
         }
 
-        private void btnMovie_Click(object sender, EventArgs e)
+        private void rdoMovie_CheckedChanged(object sender, EventArgs e)
         {
+            if (!rdoMovie.Checked) return;
+
             cboFolder.SelectedIndex = 1;
 
-            string originalCommand = txtOriginalCommand.Text.Trim();
-            if (!string.IsNullOrEmpty(originalCommand))
+            if (!_settingCategoryFromAutoDetect)
             {
-                var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
-                if (lastArg.Success)
-                {
-                    string raw = lastArg.Value.Trim().Trim('"');
-                    string ext = Path.GetExtension(raw);
-                    string cleanName = ExtractShowName(originalCommand) ?? Path.GetFileNameWithoutExtension(raw);
-                    if (!string.IsNullOrEmpty(cleanName))
-                        txtFileName.Text = cleanName + ext;
-                }
+                string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
+                if (!string.IsNullOrEmpty(showName))
+                    txtTitle.Text = showName;
+
+                TryAutoDetectCategoryAndYearFromTitle();
             }
 
             lblSeason.Visible = false;
@@ -1638,7 +1690,10 @@ namespace FFmpegAssistant
             txtSeason.Text = "";
             txtEpisode.Text = "";
 
-            btnRun.Focus();
+            UpdateFolderAndFileNameFromTitle();
+
+            if (!_settingCategoryFromAutoDetect)
+                btnRun.Focus();
         }
 
         private void txtSeason_TextChanged(object sender, EventArgs e)
@@ -1723,34 +1778,184 @@ namespace FFmpegAssistant
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
         }
 
-        private void btnTvShow_Click(object sender, EventArgs e)
+        private void rdoTvShow_CheckedChanged(object sender, EventArgs e)
         {
-            cboFolder.SelectedIndex = 2;
-
-            string originalCommand = txtOriginalCommand.Text.Trim();
-            string? showName = ExtractShowName(originalCommand);
-            if (!string.IsNullOrEmpty(showName))
-            {
-                string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
-                string showFolder = Path.Combine(baseTvFolder, showName);
-                if (!cboFolder.Items.Contains(showFolder))
-                    cboFolder.Items.Add(showFolder);
-                cboFolder.SelectedItem = showFolder;
-                if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
-                {
-                    string? outFile = GetCommandOutputFilename(originalCommand);
-                    if (outFile != null)
-                        txtFileName.Text = outFile;
-                }
-                SuggestNextEpisode(showFolder);
-            }
+            if (!rdoTvShow.Checked) return;
 
             lblSeason.Visible = true;
             txtSeason.Visible = true;
             lblEpisode.Visible = true;
             txtEpisode.Visible = true;
 
-            btnRun.Focus();
+            cboFolder.SelectedIndex = 2;
+
+            if (!_settingCategoryFromAutoDetect)
+            {
+                string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
+                if (!string.IsNullOrEmpty(showName))
+                    txtTitle.Text = showName;
+
+                TryAutoDetectCategoryAndYearFromTitle();
+            }
+
+            UpdateFolderAndFileNameFromTitle();
+
+            if (!_settingCategoryFromAutoDetect)
+                btnRun.Focus();
+        }
+
+        /// <summary>
+        /// Runs after the Title box is set — either auto-filled from the command when a radio
+        /// button is checked, or manually typed and then left. Scans the Movies and/or TV Shows
+        /// base folders for an existing subfolder named exactly "Title" or "Title (Year)". Only
+        /// the category matching an already-checked radio button is scanned; if neither is
+        /// checked, both are. A single match checks the corresponding radio button (without
+        /// re-parsing Title from the command) and fills in the year if the folder name carried
+        /// one. Zero or multiple matches make no changes, since there is nothing — or too much —
+        /// to guess from.
+        /// </summary>
+        private void TryAutoDetectCategoryAndYearFromTitle()
+        {
+            string title = txtTitle.Text.Trim();
+            if (string.IsNullOrEmpty(title)) return;
+
+            var matches = new List<(bool isTvShow, string? year)>();
+
+            if (!rdoTvShow.Checked)
+                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[1]?.ToString(), title, isTvShow: false));
+            if (!rdoMovie.Checked)
+                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), title, isTvShow: true));
+
+            if (matches.Count != 1) return;
+
+            var (isTvShow, year) = matches[0];
+
+            if (!string.IsNullOrEmpty(year))
+                txtYear.Text = year;
+
+            _settingCategoryFromAutoDetect = true;
+            if (isTvShow)
+                rdoTvShow.Checked = true;
+            else
+                rdoMovie.Checked = true;
+            _settingCategoryFromAutoDetect = false;
+        }
+
+        /// <summary>
+        /// Yields (isTvShow, year) for each immediate subfolder of baseFolder whose name is
+        /// exactly title, or title followed by " (YYYY)". year is null for an exact-name match.
+        /// </summary>
+        private static IEnumerable<(bool isTvShow, string? year)> FindTitleFolderMatches(string? baseFolder, string title, bool isTvShow)
+        {
+            if (string.IsNullOrEmpty(baseFolder) || !Directory.Exists(baseFolder))
+                yield break;
+
+            foreach (string dir in Directory.GetDirectories(baseFolder))
+            {
+                string name = Path.GetFileName(dir);
+                if (name.Equals(title, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return (isTvShow, null);
+                    continue;
+                }
+
+                var m = Regex.Match(name, @"^(.*) \((\d{4})\)$");
+                if (m.Success && m.Groups[1].Value.Equals(title, StringComparison.OrdinalIgnoreCase))
+                    yield return (isTvShow, m.Groups[2].Value);
+            }
+        }
+
+        private void txtTitle_TextChanged(object sender, EventArgs e)
+        {
+            UpdateFolderAndFileNameFromTitle();
+        }
+
+        private void txtTitle_Leave(object sender, EventArgs e)
+        {
+            TryAutoDetectCategoryAndYearFromTitle();
+        }
+
+        private void txtYear_TextChanged(object sender, EventArgs e)
+        {
+            StripNonDigits(txtYear);
+            UpdateFolderAndFileNameFromTitle();
+        }
+
+        /// <summary>
+        /// Expands a 2-digit year to 4 digits when the user leaves the field, using a rolling
+        /// pivot of "current year + 2": values at or below the pivot become 20XX (near-future
+        /// releases), values above it become 19XX. E.g. in 2026 (pivot 28): 26-28 -> 2026-2028,
+        /// 29-99 -> 1929-1999.
+        /// </summary>
+        private void txtYear_Leave(object sender, EventArgs e)
+        {
+            string? expanded = ComputeDisplayYear(txtYear.Text);
+            if (expanded != null && expanded != txtYear.Text)
+                txtYear.Text = expanded;
+        }
+
+        private static string? ComputeDisplayYear(string yearDigits)
+        {
+            if (yearDigits.Length == 4) return yearDigits;
+            if (yearDigits.Length != 2 || !int.TryParse(yearDigits, out int twoDigitYear)) return null;
+
+            int pivot = (DateTime.Now.Year + 2) % 100;
+            int century = twoDigitYear <= pivot ? 2000 : 1900;
+            return (century + twoDigitYear).ToString();
+        }
+
+        /// <summary>
+        /// Rebuilds the folder and file name from the Title/Year boxes. For a movie, the file
+        /// name becomes "Title (Year).ext". For a TV show, the subfolder becomes "Title (Year)"
+        /// and the episode suggestion logic takes over the file name from there. Does nothing
+        /// while the Title box is empty, or while neither radio button is checked.
+        /// </summary>
+        private void UpdateFolderAndFileNameFromTitle()
+        {
+            string title = txtTitle.Text.Trim();
+            if (string.IsNullOrEmpty(title)) return;
+
+            string? year = ComputeDisplayYear(txtYear.Text.Trim());
+            string displayName = year != null ? $"{title} ({year})" : title;
+
+            if (rdoMovie.Checked)
+            {
+                string ext = GetOutputFileExtensionForNaming();
+                txtFileName.Text = displayName + ext;
+            }
+            else if (rdoTvShow.Checked)
+            {
+                string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
+                string showFolder = Path.Combine(baseTvFolder, displayName);
+                if (!cboFolder.Items.Contains(showFolder))
+                    cboFolder.Items.Add(showFolder);
+                cboFolder.SelectedItem = showFolder;
+
+                ClearFileNameIfNotForShow(displayName);
+                SuggestNextEpisode(showFolder);
+
+                if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
+                {
+                    string? outFile = GetCommandOutputFilename(txtOriginalCommand.Text.Trim());
+                    if (outFile != null)
+                        txtFileName.Text = outFile;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Extension for the output file: prefers the command's actual output argument,
+        /// falling back to the last argument's extension when the command has no
+        /// clearly-identifiable output (e.g. an input-only command typed so far).
+        /// </summary>
+        private string GetOutputFileExtensionForNaming()
+        {
+            string command = txtOriginalCommand.Text.Trim();
+            string ext = GetCommandOutputExtension(command);
+            if (!string.IsNullOrEmpty(ext)) return ext;
+
+            var lastArg = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
+            return lastArg.Success ? Path.GetExtension(lastArg.Value.Trim().Trim('"')) : string.Empty;
         }
 
         /// <summary>
@@ -1843,6 +2048,7 @@ namespace FFmpegAssistant
         private void TryApplyTvShowHistory(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return;
+            if (!rdoTvShow.Checked) return;
 
             string? showName = ExtractShowName(command);
             //WriteAppLog($"HISTORY  : Extracted show name = '{showName}'");
@@ -1859,11 +2065,7 @@ namespace FFmpegAssistant
                 cboFolder.Items.Add(showFolder);
             cboFolder.Text = showFolder;
 
-            lblSeason.Visible = true;
-            txtSeason.Visible = true;
-            lblEpisode.Visible = true;
-            txtEpisode.Visible = true;
-
+            ClearFileNameIfNotForShow(subfolder);
             SuggestNextEpisode(showFolder);
         }
     }
