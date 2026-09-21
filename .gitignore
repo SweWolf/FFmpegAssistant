@@ -6,6 +6,7 @@ publish2/
 publish3/
 publish-multifile/
 publish-standalone/
+publish-small/
 
 # Release packages
 *.zip
