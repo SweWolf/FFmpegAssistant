@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace FFmpegAssistant
@@ -11,12 +13,28 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private bool _isValidating;
+        private int _totalM3u8Segments;
+        private int _m3u8SegmentsOpened;
+        private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
+        private bool _settingCategoryFromAutoDetect;
         private bool _closeAfterCancel;
+        private bool _commandSetByExtractFeature;
+        private bool _settingExtractCommand;
+        private string? _folderTextOnFocus;
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
         // -------------------------------------------------------------------------
+
+        private enum M3u8ContentType { Unknown, Subtitle, Video }
+
+        /// <summary>
+        /// Severity of a status message, used to color-code <see cref="txtStatus"/>
+        /// when <see cref="AppSettings.ColorCodedStatusMessages"/> is enabled.
+        /// </summary>
+        private enum StatusLevel { Info, Success, Warning, Error, InProgress }
 
         private enum EstimationMode { Stable, CurrentSpeed }
 
@@ -36,6 +54,18 @@ namespace FFmpegAssistant
         private const bool AdjustedFeedback = true;
         private readonly Queue<double> _speedSamples = new();
 
+        /// <summary>
+        /// The progress bar and estimated-remaining-time label cover the download and the
+        /// post-download validation decode as one continuous 0-100% pass, not two separate
+        /// ones — otherwise the countdown would hit zero and then restart once validation
+        /// begins. Download fills 0-<see cref="DownloadPhaseWeightPercent"/>%; validation
+        /// fills the rest. Before validation actually starts (and reports its own live
+        /// progress), its remaining time is only a rough guess: total video duration divided
+        /// by <see cref="ValidationSpeedEstimateDivisor"/>.
+        /// </summary>
+        private const int DownloadPhaseWeightPercent = 95;
+        private const double ValidationSpeedEstimateDivisor = 30.0;
+
         private static readonly Regex DurationPattern =
             new(@"Duration:\s*(\d{2}):(\d{2}):(\d{2})\.(\d+)", RegexOptions.Compiled);
 
@@ -52,8 +82,16 @@ namespace FFmpegAssistant
               "connection timed out", "no route to host", "no such file",
               "unable to open", "broken pipe", "i/o error", "network unreachable" };
 
-        public Form1()
+        private readonly string? _startupCommand;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+        private const int EM_SETMARGINS = 0xD3;
+        private const int EC_LEFTMARGIN = 0x1;
+
+        public Form1(string? startupCommand = null)
         {
+            _startupCommand = startupCommand;
             InitializeComponent();
         }
 
@@ -63,7 +101,10 @@ namespace FFmpegAssistant
             // No override needed here — overriding can lose alpha channel transparency.
 
             // Check for updates in the background — does not block startup
-            _ = CheckForUpdatesAsync();
+            if (AppSettings.CheckForUpdatesOnStartup == "Yes")
+                _ = CheckForUpdatesAsync();
+
+            SendMessage(txtAttempt.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
 
             InitializeProgressGrid();
 
@@ -74,7 +115,12 @@ namespace FFmpegAssistant
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
-            cboFolder.Leave += (s, _) => SuggestNextEpisode(cboFolder.Text);
+            cboFolder.Enter += (s, _) => _folderTextOnFocus = cboFolder.Text;
+            cboFolder.Leave += (s, _) =>
+            {
+                if (!string.Equals(cboFolder.Text, _folderTextOnFocus, StringComparison.Ordinal))
+                    SuggestNextEpisode(cboFolder.Text);
+            };
 
             btnOpenFile.Enabled = false;
             btnOpenLogFile.Enabled = false;
@@ -99,28 +145,71 @@ namespace FFmpegAssistant
             // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
             txtEpisode.TextChanged += txtEpisode_TextChanged;
 
-            // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted
+            // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted.
+            // Also auto-wrap bare URLs and local M3U8 file paths into a full ffmpeg command.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
                 string cmd = txtOriginalCommand.Text.Trim();
+                if (IsBarUrl(cmd) || IsLocalM3u8Path(cmd))
+                {
+                    string stripped = cmd.Trim('"');
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{stripped}\"";
+                    txtFileName.Text = "";
+                    return;
+                }
                 if (cmd.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase) && cmd.Length > 30)
+                {
+                    if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
+                    {
+                        string? outFile = GetCommandOutputFilename(cmd);
+                        if (outFile != null)
+                            txtFileName.Text = outFile;
+                    }
                     TryApplyTvShowHistory(cmd);
+                }
             };
             // Also trigger when the box loses focus (catches manual edits)
             txtOriginalCommand.Leave += (s, _) => TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
 
-            // Clear status when the user starts editing the input fields
-            txtOriginalCommand.TextChanged += (s, _) => txtStatus.Clear();
-            txtFileName.TextChanged += (s, _) => txtStatus.Clear();
-
-            if (Clipboard.ContainsText())
+            // Clear status when the user starts editing the input fields.
+            // Also clear the extract-feature flag when the user replaces the command themselves.
+            txtOriginalCommand.TextChanged += (s, _) =>
             {
-                string text = Clipboard.GetText().Trim();
-                if (text.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                txtStatus.Text = string.Empty;
+                txtStatus.ForeColor = SystemColors.WindowText;
+                if (!_settingExtractCommand)
+                    _commandSetByExtractFeature = false;
+            };
+            txtFileName.TextChanged += (s, _) =>
+            {
+                txtStatus.Text = string.Empty;
+                txtStatus.ForeColor = SystemColors.WindowText;
+            };
+
+            // Command-line argument takes priority; fall back to clipboard when nothing was passed.
+            string? startup = _startupCommand;
+            if (startup == null && Clipboard.ContainsText())
+            {
+                string clip = Clipboard.GetText().Trim();
+                if (clip.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                    startup = clip;
+            }
+
+            if (startup != null)
+            {
+                if (IsBarUrl(startup) || IsLocalM3u8Path(startup))
                 {
-                    txtOriginalCommand.Text = text;
+                    string stripped = startup.Trim('"');
+                    txtOriginalCommand.Text = $"ffmpeg -i \"{stripped}\"";
+                    txtFileName.Text = "";
+                }
+                else if (startup.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase))
+                {
+                    txtOriginalCommand.Text = startup;
+                    if (_startupCommand == null) // came from clipboard — place cursor at start, don't select all
+                        BeginInvoke(() => { txtOriginalCommand.SelectionStart = 0; txtOriginalCommand.SelectionLength = 0; });
                     // Defer until after the form is fully shown so the ComboBox updates correctly
-                    BeginInvoke(() => TryApplyTvShowHistory(text));
+                    BeginInvoke(() => TryApplyTvShowHistory(startup));
                 }
             }
         }
@@ -141,11 +230,24 @@ namespace FFmpegAssistant
             dgvProgress.DefaultCellStyle.SelectionForeColor = dgvProgress.DefaultCellStyle.ForeColor;
 
             dgvProgress.EnableHeadersVisualStyles = false;
+            dgvProgress.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
             dgvProgress.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(70, 70, 70);
             dgvProgress.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             dgvProgress.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(70, 70, 70);
             dgvProgress.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
+
+            // The default header divider blends into the dark header background — repaint it
+            // brighter so the column split is actually visible, without touching the darker
+            // grid lines used elsewhere in the (light-background) body of the grid.
+            dgvProgress.CellPainting += (s, e) =>
+            {
+                if (e.RowIndex != -1 || e.ColumnIndex != 0 || e.Graphics == null) return;
+                e.Paint(e.CellBounds, DataGridViewPaintParts.All);
+                using var pen = new Pen(Color.FromArgb(150, 150, 150));
+                e.Graphics.DrawLine(pen, e.CellBounds.Right - 1, e.CellBounds.Top + 2, e.CellBounds.Right - 1, e.CellBounds.Bottom - 3);
+                e.Handled = true;
+            };
 
             var colProperty = new DataGridViewTextBoxColumn
             {
@@ -192,21 +294,65 @@ namespace FFmpegAssistant
         {
             _totalDuration = TimeSpan.Zero;
             _progressStarted = false;
+            _isValidating = false;
+            _m3u8SegmentsOpened = 0;
             _speedSamples.Clear();
             foreach (DataGridViewRow row in dgvProgress.Rows)
                 row.Cells["colValue"].Value = "";
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
-            txtStatus.Clear();
+            txtStatus.Text = string.Empty;
+            txtStatus.ForeColor = SystemColors.WindowText;
             TaskbarProgress.Clear(this);
         }
 
-        private void SetStatus(string message)
+        private void SetStatus(string message, StatusLevel level = StatusLevel.Info)
         {
+            Color color = AppSettings.ColorCodedStatusMessages
+                ? level switch
+                {
+                    StatusLevel.Success => Color.Green,
+                    StatusLevel.Warning => Color.Orange,
+                    StatusLevel.Error => Color.Red,
+                    // A pure yellow reads poorly on the white status box, so use a darker gold instead.
+                    StatusLevel.InProgress => Color.DarkGoldenrod,
+                    _ => SystemColors.WindowText,
+                }
+                : SystemColors.WindowText;
+
             if (InvokeRequired)
-                Invoke(() => txtStatus.Text = message);
+                Invoke(() =>
+                {
+                    txtStatus.ForeColor = color;
+                    txtStatus.Text = message;
+                });
             else
+            {
+                txtStatus.ForeColor = color;
                 txtStatus.Text = message;
+            }
+        }
+
+        /// <summary>
+        /// Reacts to a finished download per the "Action When Download Finished" setting:
+        /// play a sound, show the "Done!" message box, or do nothing (status already shows "Done").
+        /// Skipped entirely if the user already asked to close the application.
+        /// </summary>
+        private void NotifyDownloadFinished()
+        {
+            if (_closeAfterCancel) return;
+
+            switch (AppSettings.ActionWhenDownloadFinished)
+            {
+                case "Message Box":
+                    MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "None":
+                    break;
+                default: // "Play a Sound"
+                    SoundLibrary.Play(AppSettings.FinishedDownloadSoundFile);
+                    break;
+            }
         }
 
         // -------------------------------------------------------------------------
@@ -215,6 +361,34 @@ namespace FFmpegAssistant
 
         private void ProcessOutputLine(string line)
         {
+            // M3U8 segment-based progress: count real segment openings vs total from pre-fetched playlist.
+            // Segment type is determined by M3U8 content type detected at pre-fetch time. Only used
+            // while the total duration is still unknown — once FFmpeg reports a Duration, the normal
+            // time-based progress below is reliable and takes over exclusively; otherwise the two would
+            // keep overwriting each other's Time/progress-bar updates as their lines interleave.
+            if (_totalM3u8Segments > 0 &&
+                _totalDuration == TimeSpan.Zero &&
+                line.Contains("Opening '", StringComparison.OrdinalIgnoreCase) &&
+                IsRealM3u8Segment(line))
+            {
+                _m3u8SegmentsOpened++;
+                int pct = Math.Min(_m3u8SegmentsOpened * 100 / _totalM3u8Segments, 99);
+                if (!_progressStarted)
+                {
+                    _progressStarted = true;
+                    SetStatus(_m3u8ContentType == M3u8ContentType.Subtitle
+                        ? "Downloading subtitles..."
+                        : "Downloading segments...");
+                }
+                Invoke(() =>
+                {
+                    progressBar.Value = pct;
+                    UpdateGridRow("Time", $"{_m3u8SegmentsOpened}/{_totalM3u8Segments}");
+                    TaskbarProgress.SetNormal(this, pct, 100);
+                });
+                return;
+            }
+
             // Status updates during the pre-download phase
             if (!_progressStarted)
             {
@@ -269,16 +443,33 @@ namespace FFmpegAssistant
 
             if (_totalDuration > TimeSpan.Zero && TimeSpan.TryParse(time, out var current))
             {
-                percent = Math.Min((int)(current.TotalSeconds / _totalDuration.TotalSeconds * 100), 100);
+                int phasePercent = Math.Min((int)(current.TotalSeconds / _totalDuration.TotalSeconds * 100), 100);
 
                 double effectiveSpeed = SpeedMode == EstimationMode.Stable
                     ? (_speedSamples.Count > 0 ? _speedSamples.Min() : currentSpeed)
                     : currentSpeed;
 
-                if (effectiveSpeed > 0 && current.TotalSeconds > 0)
+                double? phaseRemainingSecs = effectiveSpeed > 0 && current.TotalSeconds > 0
+                    ? (_totalDuration.TotalSeconds - current.TotalSeconds) / effectiveSpeed
+                    : null;
+
+                if (_isValidating)
                 {
-                    double remainingSecs = (_totalDuration.TotalSeconds - current.TotalSeconds) / effectiveSpeed;
-                    estimatedRemaining = TimeSpan.FromSeconds(remainingSecs).ToString(@"h\:mm\:ss");
+                    // Last slice of the bar; validation's own live progress drives the estimate directly.
+                    percent = DownloadPhaseWeightPercent + phasePercent * (100 - DownloadPhaseWeightPercent) / 100;
+                    if (phaseRemainingSecs.HasValue)
+                        estimatedRemaining = TimeSpan.FromSeconds(phaseRemainingSecs.Value).ToString(@"h\:mm\:ss");
+                }
+                else
+                {
+                    // First slice of the bar; pad the estimate with a rough guess for the
+                    // validation pass still to come (see DownloadPhaseWeightPercent).
+                    percent = phasePercent * DownloadPhaseWeightPercent / 100;
+                    if (phaseRemainingSecs.HasValue)
+                    {
+                        double estimatedValidationSecs = _totalDuration.TotalSeconds / ValidationSpeedEstimateDivisor;
+                        estimatedRemaining = TimeSpan.FromSeconds(phaseRemainingSecs.Value + estimatedValidationSecs).ToString(@"h\:mm\:ss");
+                    }
                 }
             }
 
@@ -382,12 +573,39 @@ namespace FFmpegAssistant
                 return;
             }
 
+            // Pre-fetch the M3U8 playlist (if applicable) to detect content type and segment count.
+            // This runs before filename determination so we can suggest the right default extension.
+            var m3u8Info = await TryGetM3u8InfoAsync(originalCommand);
+            _m3u8ContentType = m3u8Info.Type;
+            _totalM3u8Segments = m3u8Info.SegmentCount;
+            _m3u8SegmentsOpened = 0;
+
+            // The file name may already be non-empty here — e.g. auto-suggested from the Title/TV
+            // Show workflow before we had any way to know this was actually a subtitle stream. Now
+            // that the playlist confirms it, force the extension to .srt regardless of what was
+            // guessed before (a folder/episode-continuation guess has no idea this is a subtitle).
+            if (_m3u8ContentType == M3u8ContentType.Subtitle && !string.IsNullOrEmpty(fileName) &&
+                !fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName = Path.ChangeExtension(fileName, ".srt");
+                txtFileName.Text = fileName;
+            }
+
             if (string.IsNullOrEmpty(fileName))
             {
                 var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
                 if (lastArg.Success)
                 {
-                    fileName = Path.GetFileName(lastArg.Value.Trim().Trim('"'));
+                    string rawArg = lastArg.Value.Trim().Trim('"');
+                    if (rawArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                        rawArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                        IsLocalM3u8Path(rawArg))
+                    {
+                        // No explicit output filename — use M3U8 content type to pick a sensible default
+                        fileName = _m3u8ContentType == M3u8ContentType.Subtitle ? "subtitles.srt" : "output.mp4";
+                    }
+                    else
+                        fileName = Path.GetFileName(rawArg);
                     txtFileName.Text = fileName;
                 }
 
@@ -403,42 +621,11 @@ namespace FFmpegAssistant
             // "Episode.TheCoolName.mp4" rather than losing the user's intended text.
             string correctExt = GetCommandOutputExtension(originalCommand);
             if (!string.IsNullOrEmpty(correctExt) &&
-                !fileName.EndsWith(correctExt, StringComparison.OrdinalIgnoreCase))
+                !fileName.EndsWith(correctExt, StringComparison.OrdinalIgnoreCase) &&
+                !fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 fileName = fileName + correctExt;
                 txtFileName.Text = fileName;
-            }
-
-            // Handle "audio_qas" (Swedish voice-over track) according to the user's setting
-            if (originalCommand.Contains("audio_qas", StringComparison.OrdinalIgnoreCase))
-            {
-                string replaceQas = AppSettings.ReplaceAudioQas;
-
-                if (replaceQas == "Yes")
-                {
-                    originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
-                    txtOriginalCommand.Text = originalCommand;
-                }
-                else if (replaceQas == "Ask")
-                {
-                    var answer = MessageBox.Show(
-                        "The command contains the text \"audio_qas\".\n\n" +
-                        "Do you want to replace it with \"audio_eng\"?\n" +
-                        "(Recommended — \"audio_qas\" is most likely a Swedish voice-over.)",
-                        "audio_qas Detected",
-                        MessageBoxButtons.YesNoCancel,
-                        MessageBoxIcon.Question);
-
-                    if (answer == DialogResult.Cancel)
-                        return;
-
-                    if (answer == DialogResult.Yes)
-                    {
-                        originalCommand = originalCommand.Replace("audio_qas", "audio_eng", StringComparison.OrdinalIgnoreCase);
-                        txtOriginalCommand.Text = originalCommand;
-                    }
-                }
-                // "No" → skip silently
             }
 
             Directory.CreateDirectory(folder);
@@ -457,10 +644,13 @@ namespace FFmpegAssistant
 
             string outputPath = Path.Combine(folder, fileName);
 
+            bool isSrt = fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
+
             // In watch-while-downloading mode, download to a .ts file first.
             // In normal mode, download to a "(part)" file to protect against power outages —
             // the file is renamed to the final name only after successful validation.
-            bool watchMode = chkEnableWatchingWhileDownloading.Checked;
+            // SRT files use the same (part) protection but skip watch mode and video validation.
+            bool watchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt;
             string partPath = Path.Combine(folder,
                 Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
             string downloadPath = watchMode
@@ -468,6 +658,18 @@ namespace FFmpegAssistant
                 : partPath;
 
             string command = ReplaceOutputFile(originalCommand, downloadPath);
+
+            // When the input is a local M3U8 file, FFmpeg restricts allowed protocols to
+            // file,crypto,data — blocking https:// segment URLs inside the playlist.
+            // Inject the protocol whitelist before the -i flag so all segments can be fetched.
+            var localM3u8InputMatch = Regex.Match(command,
+                @"-i\s+(?:""[^""]*\.m3u[8]?""|[^\s]*\.m3u[8]?(?=\s|$))",
+                RegexOptions.IgnoreCase);
+            if (localM3u8InputMatch.Success)
+            {
+                string whitelist = "-protocol_whitelist file,crypto,data,http,https,tcp,tls -allowed_extensions ALL ";
+                command = command[..localM3u8InputMatch.Index] + whitelist + command[localM3u8InputMatch.Index..];
+            }
 
             // Overwrite protection — always check the final output file
             if (File.Exists(outputPath))
@@ -518,6 +720,7 @@ namespace FFmpegAssistant
                 _lastLogFile = logFile;
                 btnRun.Enabled = false;
                 btnCancel.Enabled = true;
+                btnClear.Enabled = false;
                 btnOpenFile.Enabled = false;
                 btnOpenLogFile.Enabled = false;
 
@@ -553,12 +756,12 @@ namespace FFmpegAssistant
                         {
                             try { if (File.Exists(downloadPath)) File.Delete(downloadPath); } catch { }
                             WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} after exit code {exitCode}");
-                            SetStatus($"Download failed — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                            SetStatus($"Download failed — retrying (attempt {attempt + 1} of {maxAttempts})...", StatusLevel.Warning);
                             keepTrying = true;
                         }
                         else
                         {
-                            SetStatus("Download failed — an error occurred.");
+                            SetStatus("Download failed — an error occurred.", StatusLevel.Error);
                             MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             LogError(fileName, message, logFile);
                         }
@@ -588,16 +791,57 @@ namespace FFmpegAssistant
                             else
                             {
                                 WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
-                                SetStatus("Conversion failed — .ts file kept.");
+                                SetStatus("Conversion failed — .ts file kept.", StatusLevel.Error);
                                 return;
                             }
                         }
 
-                        SetStatus("Validating downloaded file...");
+                        // SRT subtitle files: rename (part) file to final name, skip video validation
+                        if (isSrt)
+                        {
+                            if (new FileInfo(partPath).Length == 0)
+                            {
+                                WriteAppLog($"RESULT   : FAILED — output file is empty (0 bytes)");
+                                progressBar.Value = 0;
+                                lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                                LogError(fileName, "Output file is empty — download may have failed", logFile);
+                                MessageBox.Show(
+                                    $"The output file is empty (0 bytes):\n\n{partPath}\n\n" +
+                                    "The download likely failed — e.g. blocked segments or an invalid source.\n" +
+                                    "Check the log file for details.",
+                                    "Empty Output File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                continue;
+                            }
+
+                            SetStatus("Finalizing...");
+                            if (File.Exists(outputPath)) File.Delete(outputPath);
+                            File.Move(partPath, outputPath);
+                            _lastOutputPath = outputPath;
+                            btnOpenFile.Enabled = true;
+                            WriteAppLog($"FINALIZE : Renamed (part) file to final name");
+                            WriteAppLog($"RESULT   : SUCCESS — SRT subtitle file");
+                            progressBar.Value = 100;
+                            lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                            TaskbarProgress.Clear(this);
+                            SetStatus("Done", StatusLevel.Success);
+                            NotifyDownloadFinished();
+                            continue;
+                        }
+
+                        SetStatus("Validating downloaded file...", StatusLevel.InProgress);
+
+                        // Validation continues the same progress bar/estimate rather than starting
+                        // a second 0-100% pass (see DownloadPhaseWeightPercent). Its decode speed
+                        // differs a lot from the download/copy that just finished, so the speed
+                        // samples are cleared to avoid skewing the validation-phase estimate.
+                        _isValidating = true;
+                        _speedSamples.Clear();
+                        progressBar.Value = DownloadPhaseWeightPercent;
+                        TaskbarProgress.SetNormal(this, DownloadPhaseWeightPercent, 100);
 
                         // In normal mode validate the part file; in watch mode validate the final file
                         string validatePath = watchMode ? outputPath : partPath;
-                        bool valid = await ValidateVideoFileAsync(validatePath);
+                        bool valid = await ValidateVideoFileAsync(validatePath, logFile, _cts.Token);
                         if (valid)
                         {
                             // In normal mode: rename the (part) file to the final name now that it's verified
@@ -615,10 +859,8 @@ namespace FFmpegAssistant
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
-                            SetStatus("Done");
-                            // Skip the popup if the user already asked to close the application
-                            if (!_closeAfterCancel)
-                                MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            SetStatus("Done", StatusLevel.Success);
+                            NotifyDownloadFinished();
                         }
                         else
                         {
@@ -630,7 +872,7 @@ namespace FFmpegAssistant
                             {
                                 try { if (File.Exists(validatePath)) File.Delete(validatePath); } catch { }
                                 WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} — corrupted file");
-                                SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...");
+                                SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...", StatusLevel.Warning);
                                 keepTrying = true;
                             }
                             else
@@ -664,12 +906,12 @@ namespace FFmpegAssistant
                                     }
                                     else
                                     {
-                                        SetStatus("Downloaded file corrupted — file deleted.");
+                                        SetStatus("Downloaded file corrupted — file deleted.", StatusLevel.Error);
                                     }
                                 }
                                 else
                                 {
-                                    SetStatus("Downloaded file corrupted.");
+                                    SetStatus("Downloaded file corrupted.", StatusLevel.Error);
                                 }
                             }
                         }
@@ -757,17 +999,17 @@ namespace FFmpegAssistant
                             AppSettings.SetFfmpegExe(ofd.FileName);
                             WriteAppLog($"CONFIG   : ffmpeg path set to {ofd.FileName}");
                             keepTrying = true;
-                            SetStatus("Retrying with located FFmpeg...");
+                            SetStatus("Retrying with located FFmpeg...", StatusLevel.Warning);
                         }
                         else
                         {
-                            SetStatus("FFmpeg not found — download cancelled.");
+                            SetStatus("FFmpeg not found — download cancelled.", StatusLevel.Error);
                             LogError(fileName, "FFmpeg executable not found", logFile);
                         }
                     }
                     else
                     {
-                        SetStatus("FFmpeg not found — download cancelled.");
+                        SetStatus("FFmpeg not found — download cancelled.", StatusLevel.Error);
                         LogError(fileName, "FFmpeg executable not found", logFile);
                     }
                 }
@@ -777,7 +1019,7 @@ namespace FFmpegAssistant
                     progressBar.Value = 0;
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     TaskbarProgress.SetError(this, 100, 100);
-                    SetStatus($"Error: {ex.Message}");
+                    SetStatus($"Error: {ex.Message}", StatusLevel.Error);
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
                     MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     LogError(fileName, message, logFile);
@@ -790,6 +1032,7 @@ namespace FFmpegAssistant
                     {
                         btnRun.Enabled = true;
                         btnCancel.Enabled = false;
+                        btnClear.Enabled = true;
                     }
 
                     // If the user closed the window during a download, finish closing now
@@ -806,6 +1049,7 @@ namespace FFmpegAssistant
         {
             _cts?.Cancel();
             btnCancel.Enabled = false;
+            btnClear.Enabled = true;
         }
 
         private void btnOpenFile_Click_1(object sender, EventArgs e)
@@ -823,6 +1067,11 @@ namespace FFmpegAssistant
             txtOriginalCommand.Clear();
             cboFolder.SelectedIndex = 0;
             txtFileName.Clear();
+            txtTitle.Clear();
+            txtYear.Clear();
+
+            rdoMovie.Checked = false;
+            rdoTvShow.Checked = false;
 
             ResetProgress();
 
@@ -837,6 +1086,8 @@ namespace FFmpegAssistant
             txtEpisode.Visible = false;
             txtSeason.Text = "";
             txtEpisode.Text = "";
+
+            txtOriginalCommand.Focus();
         }
 
         private void btnOpenFolder_Click_1(object sender, EventArgs e)
@@ -866,6 +1117,8 @@ namespace FFmpegAssistant
             about.ShowDialog(this);
         }
 
+        private string? _updateReleasePageUrl;
+
         private async Task CheckForUpdatesAsync()
         {
             var currentVersion = System.Reflection.Assembly
@@ -876,16 +1129,15 @@ namespace FFmpegAssistant
 
             if (result is { IsUpdateAvailable: true })
             {
-                var answer = MessageBox.Show(
-                    $"A new version is available: {result.LatestVersion}\n\n" +
-                    $"You are running version {currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}.\n\n" +
-                    $"Do you want to go to the download page?",
-                    "Update Available", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-
-                if (answer == DialogResult.Yes)
-                    Process.Start(new ProcessStartInfo(result.ReleasePageUrl)
-                    { UseShellExecute = true });
+                _updateReleasePageUrl = result.ReleasePageUrl;
+                menuNewVersion.Visible = true;
             }
+        }
+
+        private void menuNewVersion_Click(object sender, EventArgs e)
+        {
+            if (_updateReleasePageUrl != null)
+                Process.Start(new ProcessStartInfo(_updateReleasePageUrl) { UseShellExecute = true });
         }
 
         private void menuCreateShortcut_Click(object sender, EventArgs e)
@@ -898,6 +1150,111 @@ namespace FFmpegAssistant
         {
             using var form = new SettingsForm();
             form.ShowDialog(this);
+        }
+
+        private async void mnuExtractSubtitleFile_Click(object sender, EventArgs e)
+        {
+            // Default to the last downloaded video file; fall back to the Windows Videos folder
+            string[] videoExts = { ".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts", ".wmv" };
+            string videosFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            bool lastIsVideo = _lastOutputPath != null &&
+                File.Exists(_lastOutputPath) &&
+                videoExts.Contains(Path.GetExtension(_lastOutputPath), StringComparer.OrdinalIgnoreCase);
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Select a video file to extract subtitles from",
+                Filter = "Video files|*.mkv;*.mp4;*.avi;*.mov;*.ts;*.m2ts;*.wmv|All files (*.*)|*.*",
+                InitialDirectory = lastIsVideo ? Path.GetDirectoryName(_lastOutputPath)! : videosFolder,
+                FileName = lastIsVideo ? Path.GetFileName(_lastOutputPath) : string.Empty
+            };
+            if (ofd.ShowDialog(this) != DialogResult.OK) return;
+            string videoPath = ofd.FileName;
+
+            // Probe the file for subtitle streams using ffprobe
+            string ffprobePath = GetFfprobeExe();
+            string probeArgs = $"-v quiet -print_format json -show_streams \"{videoPath}\"";
+
+            var psi = new ProcessStartInfo(ffprobePath, probeArgs)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            List<SubtitleStream> streams;
+            try
+            {
+                using var proc = Process.Start(psi)!;
+                string json = await proc.StandardOutput.ReadToEndAsync();
+                await proc.WaitForExitAsync();
+                streams = ParseSubtitleStreams(json);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Could not probe the file:\n\n{ex.Message}\n\nMake sure ffprobe.exe is installed alongside ffmpeg.exe.",
+                    "Probe Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (streams.Count == 0)
+            {
+                MessageBox.Show(
+                    "No subtitle streams were found in the selected file.",
+                    "No Subtitles", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Let the user pick which subtitle stream to extract
+            using var dlg = new ExtractSubtitleForm(streams);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            SubtitleStream selected = dlg.SelectedStream!;
+
+            // Build the FFmpeg extraction command and populate the main window
+            string suggestedName = Path.GetFileNameWithoutExtension(videoPath) + selected.SuggestedExtension;
+            string extractCommand = $"ffmpeg -i \"{videoPath}\" -map 0:{selected.StreamIndex} \"{suggestedName}\"";
+            _settingExtractCommand = true;
+            txtOriginalCommand.Text = extractCommand;
+            _settingExtractCommand = false;
+            _commandSetByExtractFeature = true;
+            txtFileName.Text = suggestedName;
+        }
+
+        private static string GetFfprobeExe()
+        {
+            string ffmpeg = AppSettings.GetFfmpegExe();
+            if (ffmpeg == "ffmpeg") return "ffprobe";
+            string dir = Path.GetDirectoryName(ffmpeg) ?? string.Empty;
+            string probe = Path.Combine(dir, "ffprobe.exe");
+            return File.Exists(probe) ? probe : "ffprobe";
+        }
+
+        private static List<SubtitleStream> ParseSubtitleStreams(string json)
+        {
+            var result = new List<SubtitleStream>();
+            if (string.IsNullOrWhiteSpace(json)) return result;
+
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("streams", out var streamsEl)) return result;
+
+            foreach (var el in streamsEl.EnumerateArray())
+            {
+                if (!el.TryGetProperty("codec_type", out var typeEl) ||
+                    typeEl.GetString() != "subtitle") continue;
+
+                int index = el.TryGetProperty("index", out var idxEl) ? idxEl.GetInt32() : 0;
+                string codec = el.TryGetProperty("codec_name", out var codecEl) ? codecEl.GetString() ?? "" : "";
+                string lang = "";
+                string title = "";
+                if (el.TryGetProperty("tags", out var tags))
+                {
+                    if (tags.TryGetProperty("language", out var langEl)) lang = langEl.GetString() ?? "";
+                    if (tags.TryGetProperty("title", out var titleEl)) title = titleEl.GetString() ?? "";
+                }
+                result.Add(new SubtitleStream(index, codec, lang, title));
+            }
+            return result;
         }
 
         private void btnOpenLogFile_Click_1(object sender, EventArgs e)
@@ -914,10 +1271,103 @@ namespace FFmpegAssistant
         // FFmpeg process
         // -------------------------------------------------------------------------
 
+        private static async Task<(int SegmentCount, M3u8ContentType Type)> TryGetM3u8InfoAsync(string command)
+        {
+            try
+            {
+                var m = Regex.Match(command, @"-i\s+""([^""]+)""", RegexOptions.IgnoreCase);
+                if (!m.Success) return (0, M3u8ContentType.Unknown);
+
+                string input = m.Groups[1].Value;
+
+                // Only attempt for .m3u8/.m3u URLs or local M3U8 files — never read arbitrary files
+                bool isUrl = input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                             input.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+                bool isM3u8Ext = input.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+                                 input.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase);
+                bool isFile = isM3u8Ext && File.Exists(input);
+                if (!isUrl && !isFile) return (0, M3u8ContentType.Unknown);
+
+                string content;
+                if (isFile)
+                    content = await File.ReadAllTextAsync(input);
+                else
+                {
+                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                    content = await client.GetStringAsync(input);
+                }
+
+                // Master playlist — has variant stream entries; cannot count leaf segments here
+                if (content.Contains("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase))
+                    return (0, M3u8ContentType.Video);
+
+                // Count real (non-dummy) #EXTINF segment URLs and classify by extension
+                int count = 0;
+                bool isSubtitle = false;
+                bool isVideo = false;
+                bool nextIsUrl = false;
+                foreach (string line in content.Split('\n'))
+                {
+                    string t = line.Trim();
+                    if (t.StartsWith("#EXTINF:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        nextIsUrl = true;
+                    }
+                    else if (nextIsUrl)
+                    {
+                        nextIsUrl = false;
+                        if (!t.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                        {
+                            count++;
+                            string tl = t.ToLowerInvariant();
+                            if (tl.Contains(".webvtt") || tl.Contains(".vtt"))
+                                isSubtitle = true;
+                            else if (tl.Contains(".ts") || tl.Contains(".m4s"))
+                                isVideo = true;
+                        }
+                    }
+                }
+
+                M3u8ContentType type = isSubtitle ? M3u8ContentType.Subtitle
+                                     : isVideo    ? M3u8ContentType.Video
+                                                  : M3u8ContentType.Unknown;
+                return (count, type);
+            }
+            catch { return (0, M3u8ContentType.Unknown); }
+        }
+
+        private bool IsRealM3u8Segment(string ffmpegLine)
+        {
+            if (ffmpegLine.Contains("dummy", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string lower = ffmpegLine.ToLowerInvariant();
+            return _m3u8ContentType == M3u8ContentType.Subtitle
+                ? lower.Contains(".webvtt'") || lower.Contains(".vtt'")
+                : lower.Contains(".ts'") || lower.Contains(".m4s'");
+        }
+
+        private static bool IsBarUrl(string s) =>
+            (s.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+             s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) &&
+            !s.Contains(' ');
+
+        // Returns true for a bare local file path to an M3U8 playlist (quoted or unquoted)
+        private static bool IsLocalM3u8Path(string s)
+        {
+            string stripped = s.Trim('"').Trim();
+            return stripped.Length >= 3
+                && char.IsLetter(stripped[0]) && stripped[1] == ':' && stripped[2] == '\\'
+                && (stripped.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+                    stripped.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string GetCommandOutputExtension(string command)
         {
             var match = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
             if (!match.Success) return string.Empty;
+            // If the last arg is the input (no explicit output in the command), return empty
+            if (LastArgIsInput(command, match)) return string.Empty;
             return Path.GetExtension(match.Value.Trim().Trim('"')); // e.g. ".mp4"
         }
 
@@ -928,7 +1378,25 @@ namespace FFmpegAssistant
                 return command;
 
             string newArg = newOutputPath.Contains(' ') ? $"\"{newOutputPath}\"" : newOutputPath;
+
+            // If the last arg is the input (no explicit output), append rather than replace
+            if (LastArgIsInput(command, match))
+                return command.TrimEnd() + " " + newArg;
+
             return command[..match.Index] + newArg;
+        }
+
+        // Returns true when the last argument of the command is an input (not an output):
+        // either an http/https URL, or the argument directly following the -i flag.
+        private static bool LastArgIsInput(string command, Match lastArgMatch)
+        {
+            string lastArg = lastArgMatch.Value.Trim().Trim('"');
+            if (lastArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                lastArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Check whether the text before this arg ends with "-i"
+            return command[..lastArgMatch.Index].TrimEnd()
+                .EndsWith("-i", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
@@ -989,33 +1457,22 @@ namespace FFmpegAssistant
         // -------------------------------------------------------------------------
 
         /// <summary>
-        /// Validates a video file by running FFmpeg over it and checking for decode errors.
+        /// Validates a video file by fully decoding it with FFmpeg and checking for decode errors.
+        /// Runs through <see cref="RunFfmpegAsync"/> (default verbosity, not "-v error") so the
+        /// existing progress parsing drives the progress bar and estimated-remaining-time label
+        /// during the decode, instead of the check running silently in the background.
         /// Returns true if the file is OK, false if it is corrupted or unreadable.
         /// </summary>
-        private static async Task<bool> ValidateVideoFileAsync(string filePath)
+        private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
                 return false;
 
-            var psi = new ProcessStartInfo(
-                AppSettings.GetFfmpegExe(),
-                $"-v error -i \"{filePath}\" -f null -")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
             try
             {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                string stderr = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                // Any output on stderr means FFmpeg found decode errors
-                return string.IsNullOrWhiteSpace(stderr);
+                var (exitCode, errorLines) = await RunFfmpegAsync(
+                    $"-i \"{filePath}\" -f null -", logFile, cancellationToken);
+                return exitCode == 0 && errorLines.Count == 0;
             }
             catch
             {
@@ -1089,12 +1546,51 @@ namespace FFmpegAssistant
         // Episode suggestion
         // -------------------------------------------------------------------------
 
+        private void SyncShowNameToFolder(string folder)
+        {
+            string folderShowName = Path.GetFileName(folder);
+            if (string.IsNullOrEmpty(folderShowName)) return;
+            var cur = EpisodePattern.Match(txtFileName.Text.Trim());
+            if (!cur.Success) return;
+            if (!cur.Groups[1].Value.Equals(folderShowName, StringComparison.OrdinalIgnoreCase))
+                txtFileName.Text = $"{folderShowName} - s{cur.Groups[2].Value}e{cur.Groups[3].Value}{cur.Groups[4].Value}";
+        }
+
+        /// <summary>
+        /// Clears the File Name box when it doesn't already belong to showDisplayName — e.g. a
+        /// leftover raw guess from the command's output argument, or an episode name for a
+        /// different show — so that a subsequent <see cref="SuggestNextEpisode"/> call is free
+        /// to fill in the real next-episode name instead of refusing to touch what looks like
+        /// someone else's deliberate filename. Leaves the extract-subtitle feature's filename
+        /// alone, matching SuggestNextEpisode's own guard.
+        /// </summary>
+        private void ClearFileNameIfNotForShow(string showDisplayName)
+        {
+            if (_commandSetByExtractFeature) return;
+
+            var m = EpisodePattern.Match(txtFileName.Text.Trim());
+            bool matchesShow = m.Success && m.Groups[1].Value.Equals(showDisplayName, StringComparison.OrdinalIgnoreCase);
+            if (!matchesShow)
+                txtFileName.Clear();
+        }
+
         private void SuggestNextEpisode(string folder)
         {
+            if (_commandSetByExtractFeature) return;
             if (!Directory.Exists(folder))
+            {
+                SyncShowNameToFolder(folder);
                 return;
+            }
+
+            // Only scan files whose extension matches the command's output extension so that
+            // e.g. extracting s01e01.srt from a folder of .mp4 files finds no .srt episodes
+            // and exits without touching the filename the extract feature already set.
+            string commandExt = GetCommandOutputExtension(txtOriginalCommand.Text.Trim());
 
             var matches = Directory.GetFiles(folder)
+                .Where(f => string.IsNullOrEmpty(commandExt) ||
+                            Path.GetExtension(f).Equals(commandExt, StringComparison.OrdinalIgnoreCase))
                 .Select(f => EpisodePattern.Match(Path.GetFileName(f)))
                 .Where(m => m.Success)
                 .OrderBy(m => int.Parse(m.Groups[2].Value))
@@ -1102,15 +1598,32 @@ namespace FFmpegAssistant
                 .ToList();
 
             if (matches.Count == 0)
+            {
+                SyncShowNameToFolder(folder);
                 return;
+            }
 
             var last = matches.Last();
             string showName = last.Groups[1].Value;
             int season = int.Parse(last.Groups[2].Value);
             int episode = int.Parse(last.Groups[3].Value) + 1;
-            string ext = last.Groups[4].Value;
+            string ext = !string.IsNullOrEmpty(commandExt) ? commandExt : last.Groups[4].Value;
             string seasonStr = season.ToString().PadLeft(last.Groups[2].Length, '0');
             string episodeStr = episode.ToString().PadLeft(last.Groups[3].Length, '0');
+
+            // Only overwrite the filename when it is empty, or when the current name is the
+            // immediately preceding episode for this show (sequential download flow).
+            // Any other value — e.g. a name set by the extract-subtitle feature — is left alone.
+            string current = txtFileName.Text.Trim();
+            if (!string.IsNullOrEmpty(current))
+            {
+                var cur = EpisodePattern.Match(current);
+                bool isImmediatelyPreceding = cur.Success &&
+                    cur.Groups[1].Value.Equals(showName, StringComparison.OrdinalIgnoreCase) &&
+                    int.Parse(cur.Groups[2].Value) == season &&
+                    int.Parse(cur.Groups[3].Value) + 1 == episode;
+                if (!isImmediatelyPreceding) return;
+            }
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
 
@@ -1122,22 +1635,19 @@ namespace FFmpegAssistant
             _updatingSeasonEpisode = false;
         }
 
-        private void btnMovie_Click(object sender, EventArgs e)
+        private void rdoMovie_CheckedChanged(object sender, EventArgs e)
         {
+            if (!rdoMovie.Checked) return;
+
             cboFolder.SelectedIndex = 1;
 
-            string originalCommand = txtOriginalCommand.Text.Trim();
-            if (!string.IsNullOrEmpty(originalCommand))
+            if (!_settingCategoryFromAutoDetect)
             {
-                var lastArg = Regex.Match(originalCommand, @"(""[^""]*""|[^\s]+)\s*$");
-                if (lastArg.Success)
-                {
-                    string raw = lastArg.Value.Trim().Trim('"');
-                    string ext = Path.GetExtension(raw);
-                    string cleanName = ExtractShowName(originalCommand) ?? Path.GetFileNameWithoutExtension(raw);
-                    if (!string.IsNullOrEmpty(cleanName))
-                        txtFileName.Text = cleanName + ext;
-                }
+                string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
+                if (!string.IsNullOrEmpty(showName))
+                    txtTitle.Text = showName;
+
+                TryAutoDetectCategoryAndYearFromTitle();
             }
 
             lblSeason.Visible = false;
@@ -1147,7 +1657,10 @@ namespace FFmpegAssistant
             txtSeason.Text = "";
             txtEpisode.Text = "";
 
-            btnRun.Focus();
+            UpdateFolderAndFileNameFromTitle();
+
+            if (!_settingCategoryFromAutoDetect)
+                btnRun.Focus();
         }
 
         private void txtSeason_TextChanged(object sender, EventArgs e)
@@ -1183,48 +1696,233 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Rebuilds the filename using the current Season and Episode box values,
-        /// overriding whatever the folder scan suggested. Does nothing if the
-        /// current filename does not match the TV-show naming pattern, or if
-        /// either box is empty / contains a non-positive number.
+        /// overriding whatever the folder scan suggested. If the current filename doesn't
+        /// already match the TV-show naming pattern — e.g. this is the very first episode
+        /// of a show, so there was no prior file for the folder scan to seed it from — the
+        /// show name and extension are derived from the current filename instead, with the
+        /// season/episode numbers defaulting to two digits. Does nothing if the filename is
+        /// empty, or either box is empty / contains a non-positive number.
         /// </summary>
         private void UpdateFileNameFromSeasonEpisode()
         {
-            var m = EpisodePattern.Match(txtFileName.Text);
-            if (!m.Success) return;
-
             if (!int.TryParse(txtSeason.Text, out int season) || season < 1) return;
             if (!int.TryParse(txtEpisode.Text, out int episode) || episode < 1) return;
 
-            string showName = m.Groups[1].Value;
-            string ext = m.Groups[4].Value;
-            string seasonStr = season.ToString().PadLeft(m.Groups[2].Length, '0');
-            string episodeStr = episode.ToString().PadLeft(m.Groups[3].Length, '0');
+            string showName;
+            string ext;
+            int seasonDigits = 2;
+            int episodeDigits = 2;
+
+            var m = EpisodePattern.Match(txtFileName.Text);
+            if (m.Success)
+            {
+                showName = m.Groups[1].Value;
+                ext = m.Groups[4].Value;
+                seasonDigits = m.Groups[2].Length;
+                episodeDigits = m.Groups[3].Length;
+            }
+            else
+            {
+                string current = txtFileName.Text.Trim();
+                if (string.IsNullOrEmpty(current)) return;
+                ext = Path.GetExtension(current);
+                if (string.IsNullOrEmpty(ext)) return;
+                // Prefer the folder's show-folder name (includes year if user added it)
+                string folderName = Path.GetFileName(cboFolder.Text.Trim());
+                if (!string.IsNullOrEmpty(folderName))
+                    showName = folderName;
+                else
+                {
+                    string? extracted = ExtractShowName(txtOriginalCommand.Text.Trim());
+                    if (extracted == null) return;
+                    showName = extracted;
+                }
+            }
+
+            string seasonStr = season.ToString().PadLeft(seasonDigits, '0');
+            string episodeStr = episode.ToString().PadLeft(episodeDigits, '0');
 
             txtFileName.Text = $"{showName} - s{seasonStr}e{episodeStr}{ext}";
         }
 
-        private void btnTvShow_Click(object sender, EventArgs e)
+        private void rdoTvShow_CheckedChanged(object sender, EventArgs e)
         {
-            cboFolder.SelectedIndex = 2;
-
-            string originalCommand = txtOriginalCommand.Text.Trim();
-            string? showName = ExtractShowName(originalCommand);
-            if (!string.IsNullOrEmpty(showName))
-            {
-                string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
-                string showFolder = Path.Combine(baseTvFolder, showName);
-                if (!cboFolder.Items.Contains(showFolder))
-                    cboFolder.Items.Add(showFolder);
-                cboFolder.SelectedItem = showFolder;
-                SuggestNextEpisode(showFolder);
-            }
+            if (!rdoTvShow.Checked) return;
 
             lblSeason.Visible = true;
             txtSeason.Visible = true;
             lblEpisode.Visible = true;
             txtEpisode.Visible = true;
 
-            btnRun.Focus();
+            cboFolder.SelectedIndex = 2;
+
+            if (!_settingCategoryFromAutoDetect)
+            {
+                string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
+                if (!string.IsNullOrEmpty(showName))
+                    txtTitle.Text = showName;
+
+                TryAutoDetectCategoryAndYearFromTitle();
+            }
+
+            UpdateFolderAndFileNameFromTitle();
+
+            if (!_settingCategoryFromAutoDetect)
+                btnRun.Focus();
+        }
+
+        /// <summary>
+        /// Runs after the Title box is set — either auto-filled from the command when a radio
+        /// button is checked, or manually typed and then left. Scans the Movies and/or TV Shows
+        /// base folders for an existing subfolder named exactly "Title" or "Title (Year)". Only
+        /// the category matching an already-checked radio button is scanned; if neither is
+        /// checked, both are. A single match checks the corresponding radio button (without
+        /// re-parsing Title from the command) and fills in the year if the folder name carried
+        /// one. Zero or multiple matches make no changes, since there is nothing — or too much —
+        /// to guess from.
+        /// </summary>
+        private void TryAutoDetectCategoryAndYearFromTitle()
+        {
+            string title = txtTitle.Text.Trim();
+            if (string.IsNullOrEmpty(title)) return;
+
+            var matches = new List<(bool isTvShow, string? year)>();
+
+            if (!rdoTvShow.Checked)
+                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[1]?.ToString(), title, isTvShow: false));
+            if (!rdoMovie.Checked)
+                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), title, isTvShow: true));
+
+            if (matches.Count != 1) return;
+
+            var (isTvShow, year) = matches[0];
+
+            if (!string.IsNullOrEmpty(year))
+                txtYear.Text = year;
+
+            _settingCategoryFromAutoDetect = true;
+            if (isTvShow)
+                rdoTvShow.Checked = true;
+            else
+                rdoMovie.Checked = true;
+            _settingCategoryFromAutoDetect = false;
+        }
+
+        /// <summary>
+        /// Yields (isTvShow, year) for each immediate subfolder of baseFolder whose name is
+        /// exactly title, or title followed by " (YYYY)". year is null for an exact-name match.
+        /// </summary>
+        private static IEnumerable<(bool isTvShow, string? year)> FindTitleFolderMatches(string? baseFolder, string title, bool isTvShow)
+        {
+            if (string.IsNullOrEmpty(baseFolder) || !Directory.Exists(baseFolder))
+                yield break;
+
+            foreach (string dir in Directory.GetDirectories(baseFolder))
+            {
+                string name = Path.GetFileName(dir);
+                if (name.Equals(title, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return (isTvShow, null);
+                    continue;
+                }
+
+                var m = Regex.Match(name, @"^(.*) \((\d{4})\)$");
+                if (m.Success && m.Groups[1].Value.Equals(title, StringComparison.OrdinalIgnoreCase))
+                    yield return (isTvShow, m.Groups[2].Value);
+            }
+        }
+
+        private void txtTitle_TextChanged(object sender, EventArgs e)
+        {
+            UpdateFolderAndFileNameFromTitle();
+        }
+
+        private void txtTitle_Leave(object sender, EventArgs e)
+        {
+            TryAutoDetectCategoryAndYearFromTitle();
+        }
+
+        private void txtYear_TextChanged(object sender, EventArgs e)
+        {
+            StripNonDigits(txtYear);
+            UpdateFolderAndFileNameFromTitle();
+        }
+
+        /// <summary>
+        /// Expands a 2-digit year to 4 digits when the user leaves the field, using a rolling
+        /// pivot of "current year + 2": values at or below the pivot become 20XX (near-future
+        /// releases), values above it become 19XX. E.g. in 2026 (pivot 28): 26-28 -> 2026-2028,
+        /// 29-99 -> 1929-1999.
+        /// </summary>
+        private void txtYear_Leave(object sender, EventArgs e)
+        {
+            string? expanded = ComputeDisplayYear(txtYear.Text);
+            if (expanded != null && expanded != txtYear.Text)
+                txtYear.Text = expanded;
+        }
+
+        private static string? ComputeDisplayYear(string yearDigits)
+        {
+            if (yearDigits.Length == 4) return yearDigits;
+            if (yearDigits.Length != 2 || !int.TryParse(yearDigits, out int twoDigitYear)) return null;
+
+            int pivot = (DateTime.Now.Year + 2) % 100;
+            int century = twoDigitYear <= pivot ? 2000 : 1900;
+            return (century + twoDigitYear).ToString();
+        }
+
+        /// <summary>
+        /// Rebuilds the folder and file name from the Title/Year boxes. For a movie, the file
+        /// name becomes "Title (Year).ext". For a TV show, the subfolder becomes "Title (Year)"
+        /// and the episode suggestion logic takes over the file name from there. Does nothing
+        /// while the Title box is empty, or while neither radio button is checked.
+        /// </summary>
+        private void UpdateFolderAndFileNameFromTitle()
+        {
+            string title = txtTitle.Text.Trim();
+            if (string.IsNullOrEmpty(title)) return;
+
+            string? year = ComputeDisplayYear(txtYear.Text.Trim());
+            string displayName = year != null ? $"{title} ({year})" : title;
+
+            if (rdoMovie.Checked)
+            {
+                string ext = GetOutputFileExtensionForNaming();
+                txtFileName.Text = displayName + ext;
+            }
+            else if (rdoTvShow.Checked)
+            {
+                string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
+                string showFolder = Path.Combine(baseTvFolder, displayName);
+                if (!cboFolder.Items.Contains(showFolder))
+                    cboFolder.Items.Add(showFolder);
+                cboFolder.SelectedItem = showFolder;
+
+                ClearFileNameIfNotForShow(displayName);
+                SuggestNextEpisode(showFolder);
+
+                if (string.IsNullOrEmpty(txtFileName.Text.Trim()))
+                {
+                    string? outFile = GetCommandOutputFilename(txtOriginalCommand.Text.Trim());
+                    if (outFile != null)
+                        txtFileName.Text = outFile;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Extension for the output file: prefers the command's actual output argument,
+        /// falling back to the last argument's extension when the command has no
+        /// clearly-identifiable output (e.g. an input-only command typed so far).
+        /// </summary>
+        private string GetOutputFileExtensionForNaming()
+        {
+            string command = txtOriginalCommand.Text.Trim();
+            string ext = GetCommandOutputExtension(command);
+            if (!string.IsNullOrEmpty(ext)) return ext;
+
+            var lastArg = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
+            return lastArg.Success ? Path.GetExtension(lastArg.Value.Trim().Trim('"')) : string.Empty;
         }
 
         /// <summary>
@@ -1232,6 +1930,28 @@ namespace FFmpegAssistant
         /// Strips everything from the first '-' or '[' delimiter onwards.
         /// Returns null if no name could be extracted.
         /// </summary>
+        private static readonly string[] OutputFileExtensions =
+            { ".mp4", ".mkv", ".avi", ".mov", ".ts", ".m2ts", ".wmv", ".srt", ".ass", ".vtt", ".mp3", ".m4a", ".aac" };
+
+        private static string? GetCommandOutputFilename(string command)
+        {
+            var quoted = Regex.Match(command, @"""([^""]+)""\s*$");
+            if (quoted.Success)
+            {
+                string name = Path.GetFileName(quoted.Groups[1].Value.Trim());
+                if (OutputFileExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+                    return name;
+            }
+            var unquoted = Regex.Match(command, @"(\S+)\s*$");
+            if (unquoted.Success)
+            {
+                string name = Path.GetFileName(unquoted.Groups[1].Value);
+                if (OutputFileExtensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+                    return name;
+            }
+            return null;
+        }
+
         private static string? ExtractShowName(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return null;
@@ -1295,6 +2015,7 @@ namespace FFmpegAssistant
         private void TryApplyTvShowHistory(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return;
+            if (!rdoTvShow.Checked) return;
 
             string? showName = ExtractShowName(command);
             //WriteAppLog($"HISTORY  : Extracted show name = '{showName}'");
@@ -1311,11 +2032,7 @@ namespace FFmpegAssistant
                 cboFolder.Items.Add(showFolder);
             cboFolder.Text = showFolder;
 
-            lblSeason.Visible = true;
-            txtSeason.Visible = true;
-            lblEpisode.Visible = true;
-            txtEpisode.Visible = true;
-
+            ClearFileNameIfNotForShow(subfolder);
             SuggestNextEpisode(showFolder);
         }
     }

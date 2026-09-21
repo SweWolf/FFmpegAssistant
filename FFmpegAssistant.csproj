@@ -7,17 +7,24 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Resources\FFmpegAssistant.ico</ApplicationIcon>
-    <Title>FFmpeg Assist</Title>
+    <Title>FFmpeg Assistant</Title>
+    <AssemblyTitle>FFmpeg Assistant</AssemblyTitle>
+    <Product>FFmpeg Assistant</Product>
     <Company>SweWolf Software</Company>
     <Authors>Uffe Peter Walderö</Authors>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <PackageIcon>FFmpegAssistant.png</PackageIcon>
+    <Description>Downloads and saves video streams using FFmpeg, with real-time progress tracking and automatic episode naming.</Description>
+    <RepositoryUrl>https://github.com/SweWolf/FFmpegAssistant</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.png" />
+    <Content Include="Resources\*.wav">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

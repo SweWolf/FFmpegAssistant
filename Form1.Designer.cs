@@ -49,19 +49,25 @@ namespace FFmpegAssistant
             menuTools = new ToolStripMenuItem();
             menuCreateShortcut = new ToolStripMenuItem();
             menuSettings = new ToolStripMenuItem();
+            subtitlesToolStripMenuItem = new ToolStripMenuItem();
+            mnuExtractSubtitleFile = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
             menuAbout = new ToolStripMenuItem();
+            menuNewVersion = new ToolStripMenuItem();
             btnClear = new Button();
             label4 = new Label();
-            txtStatus = new TextBox();
+            txtStatus = new Label();
             groupBox1 = new GroupBox();
+            txtYear = new TextBox();
+            lblYear = new Label();
+            txtTitle = new TextBox();
+            lblTitle = new Label();
             lblEpisode = new Label();
             txtEpisode = new TextBox();
             lblSeason = new Label();
             txtSeason = new TextBox();
-            label5 = new Label();
-            btnTvShow = new Button();
-            btnMovie = new Button();
+            rdoTvShow = new RadioButton();
+            rdoMovie = new RadioButton();
             toolTip1 = new ToolTip(components);
             chkEnableWatchingWhileDownloading = new CheckBox();
             label6 = new Label();
@@ -86,7 +92,7 @@ namespace FFmpegAssistant
             cboFolder.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             cboFolder.Font = new Font("Segoe UI", 12F);
             cboFolder.FormattingEnabled = true;
-            cboFolder.Location = new Point(12, 264);
+            cboFolder.Location = new Point(10, 271);
             cboFolder.Name = "cboFolder";
             cboFolder.Size = new Size(897, 29);
             cboFolder.TabIndex = 1;
@@ -96,7 +102,7 @@ namespace FFmpegAssistant
             // 
             btnBrowseForFolder.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnBrowseForFolder.Font = new Font("Segoe UI", 12F);
-            btnBrowseForFolder.Location = new Point(926, 264);
+            btnBrowseForFolder.Location = new Point(926, 271);
             btnBrowseForFolder.Name = "btnBrowseForFolder";
             btnBrowseForFolder.Size = new Size(38, 29);
             btnBrowseForFolder.TabIndex = 2;
@@ -109,7 +115,7 @@ namespace FFmpegAssistant
             // 
             txtFileName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtFileName.Font = new Font("Segoe UI", 12F);
-            txtFileName.Location = new Point(12, 327);
+            txtFileName.Location = new Point(10, 334);
             txtFileName.Name = "txtFileName";
             txtFileName.Size = new Size(897, 29);
             txtFileName.TabIndex = 3;
@@ -121,15 +127,15 @@ namespace FFmpegAssistant
             label1.Font = new Font("Segoe UI", 12F);
             label1.Location = new Point(12, 33);
             label1.Name = "label1";
-            label1.Size = new Size(143, 21);
+            label1.Size = new Size(83, 21);
             label1.TabIndex = 4;
-            label1.Text = "Original Command";
+            label1.Text = "Command";
             // 
             // label2
             // 
             label2.AutoSize = true;
             label2.Font = new Font("Segoe UI", 12F);
-            label2.Location = new Point(12, 240);
+            label2.Location = new Point(10, 247);
             label2.Name = "label2";
             label2.Size = new Size(54, 21);
             label2.TabIndex = 5;
@@ -139,7 +145,7 @@ namespace FFmpegAssistant
             // 
             label3.AutoSize = true;
             label3.Font = new Font("Segoe UI", 12F);
-            label3.Location = new Point(12, 303);
+            label3.Location = new Point(10, 310);
             label3.Name = "label3";
             label3.Size = new Size(80, 21);
             label3.TabIndex = 6;
@@ -147,10 +153,10 @@ namespace FFmpegAssistant
             // 
             // btnRun
             // 
-            btnRun.Font = new Font("Segoe UI", 12F);
-            btnRun.Location = new Point(14, 428);
+            btnRun.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
+            btnRun.Location = new Point(12, 409);
             btnRun.Name = "btnRun";
-            btnRun.Size = new Size(153, 36);
+            btnRun.Size = new Size(153, 44);
             btnRun.TabIndex = 5;
             btnRun.Text = "Download";
             toolTip1.SetToolTip(btnRun, "FFmpeg runs the command and downloads the video file");
@@ -160,9 +166,9 @@ namespace FFmpegAssistant
             // btnCancel
             // 
             btnCancel.Font = new Font("Segoe UI", 12F);
-            btnCancel.Location = new Point(189, 428);
+            btnCancel.Location = new Point(187, 409);
             btnCancel.Name = "btnCancel";
-            btnCancel.Size = new Size(153, 36);
+            btnCancel.Size = new Size(153, 44);
             btnCancel.TabIndex = 6;
             btnCancel.Text = "Cancel";
             toolTip1.SetToolTip(btnCancel, "Cancel the download in progress");
@@ -175,12 +181,12 @@ namespace FFmpegAssistant
             dgvProgress.AllowUserToDeleteRows = false;
             dgvProgress.AllowUserToResizeRows = false;
             dgvProgress.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvProgress.Location = new Point(14, 482);
+            dgvProgress.Location = new Point(14, 473);
             dgvProgress.Name = "dgvProgress";
             dgvProgress.ReadOnly = true;
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvProgress.Size = new Size(365, 139);
+            dgvProgress.Size = new Size(365, 198);
             dgvProgress.TabIndex = 8;
             dgvProgress.TabStop = false;
             toolTip1.SetToolTip(dgvProgress, "Feedback from FFmpeg");
@@ -188,7 +194,7 @@ namespace FFmpegAssistant
             // progressBar
             // 
             progressBar.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            progressBar.Location = new Point(14, 783);
+            progressBar.Location = new Point(14, 766);
             progressBar.Name = "progressBar";
             progressBar.Size = new Size(1050, 23);
             progressBar.TabIndex = 9;
@@ -197,7 +203,7 @@ namespace FFmpegAssistant
             // 
             btnOpenFile.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenFile.Font = new Font("Segoe UI", 12F);
-            btnOpenFile.Location = new Point(14, 818);
+            btnOpenFile.Location = new Point(14, 801);
             btnOpenFile.Name = "btnOpenFile";
             btnOpenFile.Size = new Size(153, 36);
             btnOpenFile.TabIndex = 10;
@@ -210,7 +216,7 @@ namespace FFmpegAssistant
             // 
             btnOpenFolder.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenFolder.Font = new Font("Segoe UI", 12F);
-            btnOpenFolder.Location = new Point(189, 818);
+            btnOpenFolder.Location = new Point(189, 801);
             btnOpenFolder.Name = "btnOpenFolder";
             btnOpenFolder.Size = new Size(153, 36);
             btnOpenFolder.TabIndex = 11;
@@ -223,7 +229,7 @@ namespace FFmpegAssistant
             // 
             btnOpenLogFile.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOpenLogFile.Font = new Font("Segoe UI", 12F);
-            btnOpenLogFile.Location = new Point(365, 818);
+            btnOpenLogFile.Location = new Point(365, 801);
             btnOpenLogFile.Name = "btnOpenLogFile";
             btnOpenLogFile.Size = new Size(153, 36);
             btnOpenLogFile.TabIndex = 12;
@@ -237,7 +243,7 @@ namespace FFmpegAssistant
             lblEstimatedRemaining.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             lblEstimatedRemaining.AutoSize = true;
             lblEstimatedRemaining.Font = new Font("Segoe UI", 10F);
-            lblEstimatedRemaining.Location = new Point(14, 764);
+            lblEstimatedRemaining.Location = new Point(14, 747);
             lblEstimatedRemaining.Name = "lblEstimatedRemaining";
             lblEstimatedRemaining.Size = new Size(186, 19);
             lblEstimatedRemaining.TabIndex = 14;
@@ -245,7 +251,7 @@ namespace FFmpegAssistant
             // 
             // menuStrip
             // 
-            menuStrip.Items.AddRange(new ToolStripItem[] { menuTools, menuHelp });
+            menuStrip.Items.AddRange(new ToolStripItem[] { menuTools, subtitlesToolStripMenuItem, menuHelp, menuNewVersion });
             menuStrip.Location = new Point(0, 0);
             menuStrip.Name = "menuStrip";
             menuStrip.Size = new Size(1074, 24);
@@ -272,6 +278,20 @@ namespace FFmpegAssistant
             menuSettings.Text = "Settings...";
             menuSettings.Click += menuSettings_Click_1;
             // 
+            // subtitlesToolStripMenuItem
+            // 
+            subtitlesToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { mnuExtractSubtitleFile });
+            subtitlesToolStripMenuItem.Name = "subtitlesToolStripMenuItem";
+            subtitlesToolStripMenuItem.Size = new Size(64, 20);
+            subtitlesToolStripMenuItem.Text = "Subtitles";
+            // 
+            // mnuExtractSubtitleFile
+            // 
+            mnuExtractSubtitleFile.Name = "mnuExtractSubtitleFile";
+            mnuExtractSubtitleFile.Size = new Size(182, 22);
+            mnuExtractSubtitleFile.Text = "Extract Subtitle File...";
+            mnuExtractSubtitleFile.Click += mnuExtractSubtitleFile_Click;
+            // 
             // menuHelp
             // 
             menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout });
@@ -286,12 +306,23 @@ namespace FFmpegAssistant
             menuAbout.Text = "About";
             menuAbout.Click += menuAbout_Click;
             // 
+            // menuNewVersion
+            // 
+            menuNewVersion.Alignment = ToolStripItemAlignment.Right;
+            menuNewVersion.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            menuNewVersion.ForeColor = Color.Green;
+            menuNewVersion.Name = "menuNewVersion";
+            menuNewVersion.Size = new Size(142, 20);
+            menuNewVersion.Text = "New Version Available";
+            menuNewVersion.Visible = false;
+            menuNewVersion.Click += menuNewVersion_Click;
+            // 
             // btnClear
             // 
             btnClear.Font = new Font("Segoe UI", 12F);
-            btnClear.Location = new Point(365, 428);
+            btnClear.Location = new Point(363, 409);
             btnClear.Name = "btnClear";
-            btnClear.Size = new Size(153, 36);
+            btnClear.Size = new Size(153, 44);
             btnClear.TabIndex = 7;
             btnClear.Text = "Clear";
             toolTip1.SetToolTip(btnClear, "Clear the boxes on the screen");
@@ -303,7 +334,7 @@ namespace FFmpegAssistant
             label4.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             label4.AutoSize = true;
             label4.Font = new Font("Segoe UI", 10F);
-            label4.Location = new Point(14, 733);
+            label4.Location = new Point(14, 716);
             label4.Name = "label4";
             label4.Size = new Size(47, 19);
             label4.TabIndex = 14;
@@ -312,34 +343,82 @@ namespace FFmpegAssistant
             // txtStatus
             // 
             txtStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            txtStatus.BackColor = SystemColors.Window;
             txtStatus.BorderStyle = BorderStyle.FixedSingle;
-            txtStatus.Location = new Point(67, 733);
+            txtStatus.Location = new Point(67, 716);
             txtStatus.Name = "txtStatus";
-            txtStatus.ReadOnly = true;
+            txtStatus.Padding = new Padding(5, 0, 0, 0);
             txtStatus.Size = new Size(824, 23);
             txtStatus.TabIndex = 9;
-            txtStatus.TabStop = false;
+            txtStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // groupBox1
             // 
+            groupBox1.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            groupBox1.Controls.Add(txtYear);
+            groupBox1.Controls.Add(lblYear);
+            groupBox1.Controls.Add(txtTitle);
+            groupBox1.Controls.Add(lblTitle);
             groupBox1.Controls.Add(lblEpisode);
             groupBox1.Controls.Add(txtEpisode);
             groupBox1.Controls.Add(lblSeason);
             groupBox1.Controls.Add(txtSeason);
-            groupBox1.Controls.Add(label5);
-            groupBox1.Controls.Add(btnTvShow);
-            groupBox1.Controls.Add(btnMovie);
+            groupBox1.Controls.Add(rdoTvShow);
+            groupBox1.Controls.Add(rdoMovie);
             groupBox1.Location = new Point(14, 111);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(621, 114);
-            groupBox1.TabIndex = 16;
+            groupBox1.Size = new Size(895, 122);
+            groupBox1.TabIndex = 1;
             groupBox1.TabStop = false;
             groupBox1.Text = "Auto suggest folder and file name";
             // 
+            // txtYear
+            // 
+            txtYear.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            txtYear.Location = new Point(591, 79);
+            txtYear.MaxLength = 4;
+            txtYear.Name = "txtYear";
+            txtYear.Size = new Size(62, 23);
+            txtYear.TabIndex = 3;
+            toolTip1.SetToolTip(txtYear, "Optional — 2 or 4 digits, e.g. 26 or 2026");
+            txtYear.TextChanged += txtYear_TextChanged;
+            txtYear.Leave += txtYear_Leave;
+            // 
+            // lblYear
+            // 
+            lblYear.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            lblYear.AutoSize = true;
+            lblYear.Location = new Point(591, 61);
+            lblYear.Name = "lblYear";
+            lblYear.Size = new Size(29, 15);
+            lblYear.TabIndex = 9;
+            lblYear.Text = "Year";
+            // 
+            // txtTitle
+            // 
+            txtTitle.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtTitle.Location = new Point(15, 79);
+            txtTitle.Name = "txtTitle";
+            txtTitle.Size = new Size(500, 23);
+            txtTitle.TabIndex = 2;
+            toolTip1.SetToolTip(txtTitle, "Title used to build the folder and file name");
+            txtTitle.TextChanged += txtTitle_TextChanged;
+            txtTitle.Leave += txtTitle_Leave;
+            // 
+            // lblTitle
+            // 
+            lblTitle.AutoSize = true;
+            lblTitle.Location = new Point(15, 61);
+            lblTitle.Name = "lblTitle";
+            lblTitle.Size = new Size(30, 15);
+            lblTitle.TabIndex = 7;
+            lblTitle.Text = "Title";
+            // 
             // lblEpisode
             // 
+            lblEpisode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblEpisode.AutoSize = true;
-            lblEpisode.Location = new Point(482, 47);
+            lblEpisode.Location = new Point(804, 61);
             lblEpisode.Name = "lblEpisode";
             lblEpisode.Size = new Size(48, 15);
             lblEpisode.TabIndex = 6;
@@ -348,17 +427,19 @@ namespace FFmpegAssistant
             // 
             // txtEpisode
             // 
-            txtEpisode.Location = new Point(482, 65);
+            txtEpisode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            txtEpisode.Location = new Point(804, 79);
             txtEpisode.Name = "txtEpisode";
             txtEpisode.Size = new Size(63, 23);
-            txtEpisode.TabIndex = 3;
+            txtEpisode.TabIndex = 5;
             toolTip1.SetToolTip(txtEpisode, "Optional");
             txtEpisode.Visible = false;
             // 
             // lblSeason
             // 
+            lblSeason.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             lblSeason.AutoSize = true;
-            lblSeason.Location = new Point(404, 47);
+            lblSeason.Location = new Point(726, 61);
             lblSeason.Name = "lblSeason";
             lblSeason.Size = new Size(44, 15);
             lblSeason.TabIndex = 4;
@@ -367,50 +448,42 @@ namespace FFmpegAssistant
             // 
             // txtSeason
             // 
-            txtSeason.Location = new Point(404, 65);
+            txtSeason.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            txtSeason.Location = new Point(726, 79);
             txtSeason.Name = "txtSeason";
             txtSeason.Size = new Size(63, 23);
-            txtSeason.TabIndex = 2;
+            txtSeason.TabIndex = 4;
             toolTip1.SetToolTip(txtSeason, "Optional");
             txtSeason.Visible = false;
             txtSeason.TextChanged += txtSeason_TextChanged;
             // 
-            // label5
+            // rdoTvShow
             // 
-            label5.AutoSize = true;
-            label5.Location = new Point(15, 30);
-            label5.Name = "label5";
-            label5.Size = new Size(248, 15);
-            label5.TabIndex = 2;
-            label5.Text = "Select type of video to get an auto suggestion";
+            rdoTvShow.Location = new Point(192, 22);
+            rdoTvShow.Name = "rdoTvShow";
+            rdoTvShow.Size = new Size(153, 36);
+            rdoTvShow.TabIndex = 1;
+            rdoTvShow.Text = "TV Show";
+            toolTip1.SetToolTip(rdoTvShow, "Auto suggest folder and file name for a TV show");
+            rdoTvShow.UseVisualStyleBackColor = true;
+            rdoTvShow.CheckedChanged += rdoTvShow_CheckedChanged;
             // 
-            // btnTvShow
+            // rdoMovie
             // 
-            btnTvShow.Location = new Point(192, 65);
-            btnTvShow.Name = "btnTvShow";
-            btnTvShow.Size = new Size(153, 36);
-            btnTvShow.TabIndex = 1;
-            btnTvShow.Text = "TV Show";
-            toolTip1.SetToolTip(btnTvShow, "Auto suggest folder and file name for a TV show");
-            btnTvShow.UseVisualStyleBackColor = true;
-            btnTvShow.Click += btnTvShow_Click;
-            // 
-            // btnMovie
-            // 
-            btnMovie.Location = new Point(15, 65);
-            btnMovie.Name = "btnMovie";
-            btnMovie.Size = new Size(153, 36);
-            btnMovie.TabIndex = 0;
-            btnMovie.Text = "Movie";
-            toolTip1.SetToolTip(btnMovie, "Auto suggest folder and file name for a movie");
-            btnMovie.UseVisualStyleBackColor = true;
-            btnMovie.Click += btnMovie_Click;
+            rdoMovie.Location = new Point(15, 22);
+            rdoMovie.Name = "rdoMovie";
+            rdoMovie.Size = new Size(153, 36);
+            rdoMovie.TabIndex = 0;
+            rdoMovie.Text = "Movie";
+            toolTip1.SetToolTip(rdoMovie, "Auto suggest folder and file name for a movie");
+            rdoMovie.UseVisualStyleBackColor = true;
+            rdoMovie.CheckedChanged += rdoMovie_CheckedChanged;
             // 
             // chkEnableWatchingWhileDownloading
             // 
             chkEnableWatchingWhileDownloading.AutoSize = true;
             chkEnableWatchingWhileDownloading.Font = new Font("Segoe UI", 12F);
-            chkEnableWatchingWhileDownloading.Location = new Point(14, 389);
+            chkEnableWatchingWhileDownloading.Location = new Point(12, 370);
             chkEnableWatchingWhileDownloading.Name = "chkEnableWatchingWhileDownloading";
             chkEnableWatchingWhileDownloading.Size = new Size(285, 25);
             chkEnableWatchingWhileDownloading.TabIndex = 4;
@@ -423,7 +496,7 @@ namespace FFmpegAssistant
             label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label6.AutoSize = true;
             label6.Font = new Font("Segoe UI", 10F);
-            label6.Location = new Point(926, 733);
+            label6.Location = new Point(926, 716);
             label6.Name = "label6";
             label6.Size = new Size(60, 19);
             label6.TabIndex = 17;
@@ -433,7 +506,7 @@ namespace FFmpegAssistant
             // 
             txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             txtAttempt.BorderStyle = BorderStyle.FixedSingle;
-            txtAttempt.Location = new Point(992, 733);
+            txtAttempt.Location = new Point(992, 716);
             txtAttempt.Name = "txtAttempt";
             txtAttempt.ReadOnly = true;
             txtAttempt.Size = new Size(59, 23);
@@ -445,7 +518,7 @@ namespace FFmpegAssistant
             AcceptButton = btnRun;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1074, 866);
+            ClientSize = new Size(1074, 849);
             Controls.Add(txtAttempt);
             Controls.Add(label6);
             Controls.Add(chkEnableWatchingWhileDownloading);
@@ -505,16 +578,16 @@ namespace FFmpegAssistant
         private ToolStripMenuItem menuCreateShortcut;
         private ToolStripMenuItem menuHelp;
         private ToolStripMenuItem menuAbout;
+        private ToolStripMenuItem menuNewVersion;
         private ToolStripMenuItem menuSettings;
         private Button btnOpenLogFile;
         private Label lblEstimatedRemaining;
         private Button btnClear;
         private Label label4;
-        private TextBox txtStatus;
+        private Label txtStatus;
         private GroupBox groupBox1;
-        private Button btnMovie;
-        private Label label5;
-        private Button btnTvShow;
+        private RadioButton rdoMovie;
+        private RadioButton rdoTvShow;
         private ToolTip toolTip1;
         private CheckBox chkEnableWatchingWhileDownloading;
         private Label lblEpisode;
@@ -523,5 +596,11 @@ namespace FFmpegAssistant
         private TextBox txtSeason;
         private Label label6;
         private TextBox txtAttempt;
+        private ToolStripMenuItem subtitlesToolStripMenuItem;
+        private ToolStripMenuItem mnuExtractSubtitleFile;
+        private Label lblYear;
+        private TextBox txtTitle;
+        private Label lblTitle;
+        private TextBox txtYear;
     }
 }
