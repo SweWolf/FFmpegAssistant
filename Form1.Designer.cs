@@ -83,7 +83,7 @@ namespace FFmpegAssistant
             txtOriginalCommand.Font = new Font("Segoe UI", 12F);
             txtOriginalCommand.Location = new Point(12, 57);
             txtOriginalCommand.Name = "txtOriginalCommand";
-            txtOriginalCommand.Size = new Size(1039, 29);
+            txtOriginalCommand.Size = new Size(1050, 29);
             txtOriginalCommand.TabIndex = 0;
             toolTip1.SetToolTip(txtOriginalCommand, "Command that FFmpeg should run (the name of the download file will be adjusted)");
             // 
@@ -196,7 +196,7 @@ namespace FFmpegAssistant
             progressBar.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             progressBar.Location = new Point(14, 766);
             progressBar.Name = "progressBar";
-            progressBar.Size = new Size(1050, 23);
+            progressBar.Size = new Size(1048, 23);
             progressBar.TabIndex = 9;
             // 
             // btnOpenFile
@@ -459,7 +459,7 @@ namespace FFmpegAssistant
             // 
             // rdoTvShow
             // 
-            rdoTvShow.Location = new Point(192, 22);
+            rdoTvShow.Location = new Point(140, 22);
             rdoTvShow.Name = "rdoTvShow";
             rdoTvShow.Size = new Size(153, 36);
             rdoTvShow.TabIndex = 1;
@@ -496,7 +496,7 @@ namespace FFmpegAssistant
             label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label6.AutoSize = true;
             label6.Font = new Font("Segoe UI", 10F);
-            label6.Location = new Point(926, 716);
+            label6.Location = new Point(937, 716);
             label6.Name = "label6";
             label6.Size = new Size(60, 19);
             label6.TabIndex = 17;
@@ -506,7 +506,7 @@ namespace FFmpegAssistant
             // 
             txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             txtAttempt.BorderStyle = BorderStyle.FixedSingle;
-            txtAttempt.Location = new Point(992, 716);
+            txtAttempt.Location = new Point(1003, 716);
             txtAttempt.Name = "txtAttempt";
             txtAttempt.ReadOnly = true;
             txtAttempt.Size = new Size(59, 23);
