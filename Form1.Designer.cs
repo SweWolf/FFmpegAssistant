@@ -275,7 +275,7 @@ namespace FFmpegAssistant
             // 
             menuSettings.Name = "menuSettings";
             menuSettings.Size = new Size(165, 22);
-            menuSettings.Text = "Settings...";
+            menuSettings.Text = "Settings";
             menuSettings.Click += menuSettings_Click_1;
             // 
             // subtitlesToolStripMenuItem
