@@ -1,0 +1,9 @@
+# Store text as LF in the repository, check it out as CRLF (Windows / Visual Studio),
+# regardless of each machine's core.autocrlf setting.
+* text=auto eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.xlsx binary
+*.wav  binary
