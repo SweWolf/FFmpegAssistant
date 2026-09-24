@@ -628,6 +628,20 @@ namespace FFmpegAssistant
                 txtFileName.Text = fileName;
             }
 
+            // Illegal characters would make CreateDirectory throw, or FFmpeg fail with a cryptic exit code
+            if (GetInvalidPathCharError(folder) is string folderError)
+            {
+                MessageBox.Show(folderError, "FFmpeg Assistant", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                cboFolder.Focus();
+                return;
+            }
+            if (GetInvalidPathCharError(fileName) is string nameError)
+            {
+                MessageBox.Show(nameError, "FFmpeg Assistant", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtFileName.Focus();
+                return;
+            }
+
             Directory.CreateDirectory(folder);
 
             // Save TV show history so the folder is auto-suggested next time
@@ -1369,6 +1383,30 @@ namespace FFmpegAssistant
             // If the last arg is the input (no explicit output in the command), return empty
             if (LastArgIsInput(command, match)) return string.Empty;
             return Path.GetExtension(match.Value.Trim().Trim('"')); // e.g. ".mp4"
+        }
+
+        /// <summary>
+        /// Returns an error message if <paramref name="path"/> contains a character that isn't
+        /// allowed in a file or folder name on this OS (on Windows " &lt; &gt; | : * ? and control
+        /// characters), otherwise null. FFmpeg only reports a cryptic exit code (-22) for those.
+        /// (Same routine in all the SweWolf FFmpeg apps.)
+        /// </summary>
+        private static string? GetInvalidPathCharError(string path)
+        {
+            char[] invalid = Path.GetInvalidFileNameChars();
+            string root = Path.GetPathRoot(path) ?? "";
+            foreach (string name in path[root.Length..].Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            {
+                int i = name.IndexOfAny(invalid);
+                if (i < 0) continue;
+
+                string found = char.IsControl(name[i]) ? "an invisible control character" : $"the character \"{name[i]}\"";
+                string shown = string.Join(" ", invalid.Where(c => !char.IsControl(c)
+                    && c != Path.DirectorySeparatorChar && c != Path.AltDirectorySeparatorChar));
+                return $"\"{name}\" contains {found}, which is not allowed in file and folder names."
+                    + (shown.Length > 0 ? $"\n\nThese characters are not allowed: {shown}" : "");
+            }
+            return null;
         }
 
         private static string ReplaceOutputFile(string command, string newOutputPath)
