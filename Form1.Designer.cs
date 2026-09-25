@@ -464,7 +464,7 @@ namespace FFmpegAssistant
             rdoTvShow.Size = new Size(153, 36);
             rdoTvShow.TabIndex = 1;
             rdoTvShow.Text = "TV Show";
-            toolTip1.SetToolTip(rdoTvShow, "Auto suggest folder and file name for a TV show");
+            toolTip1.SetToolTip(rdoTvShow, "Auto-suggest folder and file name for a TV show");
             rdoTvShow.UseVisualStyleBackColor = true;
             rdoTvShow.CheckedChanged += rdoTvShow_CheckedChanged;
             // 
@@ -475,7 +475,7 @@ namespace FFmpegAssistant
             rdoMovie.Size = new Size(153, 36);
             rdoMovie.TabIndex = 0;
             rdoMovie.Text = "Movie";
-            toolTip1.SetToolTip(rdoMovie, "Auto suggest folder and file name for a movie");
+            toolTip1.SetToolTip(rdoMovie, "Auto-suggest folder and file name for a movie");
             rdoMovie.UseVisualStyleBackColor = true;
             rdoMovie.CheckedChanged += rdoMovie_CheckedChanged;
             // 
