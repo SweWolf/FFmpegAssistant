@@ -26,6 +26,9 @@ namespace FFmpegAssistant
         private bool _settingExtractCommand;
         private string? _folderTextOnFocus;
 
+        // Folders the app itself suggested: created without asking if they don't exist yet
+        private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
+
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
         // -------------------------------------------------------------------------
@@ -114,9 +117,9 @@ namespace FFmpegAssistant
             Activated += (s, _) => TaskbarFlash.Stop(this);
 
             string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-            cboFolder.Items.Add(videos);
-            cboFolder.Items.Add(Path.Combine(videos, "Movies"));
-            cboFolder.Items.Add(Path.Combine(videos, "TV Shows"));
+            AddSuggestedFolder(videos);
+            AddSuggestedFolder(Path.Combine(videos, "Movies"));
+            AddSuggestedFolder(Path.Combine(videos, "TV Shows"));
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
@@ -649,7 +652,12 @@ namespace FFmpegAssistant
                 return;
             }
 
-            Directory.CreateDirectory(folder);
+            // FFmpeg can't create folders: create a missing one here (asking first, unless the app suggested it)
+            if (!EnsureFolderExists(folder, askFirst: !_suggestedFolders.Contains(Path.TrimEndingDirectorySeparator(folder))))
+            {
+                cboFolder.Focus();
+                return;
+            }
 
             // Save TV show history so the folder is auto-suggested next time
             const string tvShowsMarker = @"\TV Shows\";
@@ -1073,6 +1081,47 @@ namespace FFmpegAssistant
                         Close();
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Adds <paramref name="folder"/> to the folder list and remembers it as suggested by the app,
+        /// so <see cref="EnsureFolderExists"/> creates it without asking.
+        /// </summary>
+        private void AddSuggestedFolder(string folder)
+        {
+            if (!cboFolder.Items.Contains(folder))
+                cboFolder.Items.Add(folder);
+            _suggestedFolders.Add(Path.TrimEndingDirectorySeparator(folder));
+        }
+
+        /// <summary>
+        /// Creates <paramref name="folder"/> (including any missing parent folders) if it doesn't exist yet,
+        /// asking first when <paramref name="askFirst"/> is true. Returns false if the user declines
+        /// or the folder could not be created.
+        /// </summary>
+        private bool EnsureFolderExists(string folder, bool askFirst)
+        {
+            if (Directory.Exists(folder)) return true;
+
+            if (askFirst)
+            {
+                var answer = MessageBox.Show(
+                    $"The folder \"{folder}\" does not exist.\n\nDo you want to create it now?",
+                    AppTitle, MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+                if (answer != DialogResult.OK) return false;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(folder);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not create the folder:\n{folder}\n\n{ex.Message}",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
@@ -1949,8 +1998,7 @@ namespace FFmpegAssistant
             {
                 string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
                 string showFolder = Path.Combine(baseTvFolder, displayName);
-                if (!cboFolder.Items.Contains(showFolder))
-                    cboFolder.Items.Add(showFolder);
+                AddSuggestedFolder(showFolder);
                 cboFolder.SelectedItem = showFolder;
 
                 ClearFileNameIfNotForShow(displayName);
@@ -2114,8 +2162,7 @@ namespace FFmpegAssistant
             string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
             string showFolder = Path.Combine(baseTvFolder, subfolder);
 
-            if (!cboFolder.Items.Contains(showFolder))
-                cboFolder.Items.Add(showFolder);
+            AddSuggestedFolder(showFolder);
             cboFolder.Text = showFolder;
 
             ClearFileNameIfNotForShow(subfolder);
