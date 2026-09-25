@@ -719,6 +719,10 @@ namespace FFmpegAssistant
             int attempt = 0;
             txtAttempt.Text = "";
 
+            // Keep the PC from going to sleep until all attempts, the validation and the
+            // watch-mode conversion are done (released when this method exits, by any path)
+            using var sleepBlocker = SleepBlocker.Begin();
+
             bool keepTrying = true;
             while (keepTrying)
             {
