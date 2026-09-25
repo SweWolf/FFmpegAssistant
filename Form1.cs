@@ -110,6 +110,9 @@ namespace FFmpegAssistant
 
             InitializeProgressGrid();
 
+            // Clear the "download finished" taskbar flash as soon as the user is back in the app
+            Activated += (s, _) => TaskbarFlash.Stop(this);
+
             string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             cboFolder.Items.Add(videos);
             cboFolder.Items.Add(Path.Combine(videos, "Movies"));
@@ -343,6 +346,8 @@ namespace FFmpegAssistant
         private void NotifyDownloadFinished()
         {
             if (_closeAfterCancel) return;
+
+            TaskbarFlash.FlashIfInactive(this);
 
             switch (AppSettings.ActionWhenDownloadFinished)
             {
@@ -782,6 +787,7 @@ namespace FFmpegAssistant
                         else
                         {
                             SetStatus("Download failed — an error occurred.", StatusLevel.Error);
+                            TaskbarFlash.FlashIfInactive(this);
                             MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             LogError(fileName, message, logFile);
                         }
@@ -812,6 +818,7 @@ namespace FFmpegAssistant
                             {
                                 WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
                                 SetStatus("Conversion failed — .ts file kept.", StatusLevel.Error);
+                                TaskbarFlash.FlashIfInactive(this);
                                 return;
                             }
                         }
@@ -825,6 +832,7 @@ namespace FFmpegAssistant
                                 progressBar.Value = 0;
                                 lblEstimatedRemaining.Text = "Estimated remaining time: —";
                                 LogError(fileName, "Output file is empty — download may have failed", logFile);
+                                TaskbarFlash.FlashIfInactive(this);
                                 MessageBox.Show(
                                     $"The output file is empty (0 bytes):\n\n{partPath}\n\n" +
                                     "The download likely failed — e.g. blocked segments or an invalid source.\n" +
@@ -899,6 +907,7 @@ namespace FFmpegAssistant
                             {
                                 LogError(fileName, "File validation failed — corrupted download", logFile);
 
+                                TaskbarFlash.FlashIfInactive(this);
                                 var deleteAnswer = MessageBox.Show(
                                     $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
                                     AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -1002,6 +1011,7 @@ namespace FFmpegAssistant
                     TaskbarProgress.SetError(this, 100, 100);
                     WriteAppLog($"RESULT   : FFMPEG NOT FOUND — {win32ex.Message}");
 
+                    TaskbarFlash.FlashIfInactive(this);
                     var answer = MessageBox.Show(
                         "FFmpeg was not found on this system.\n\nWould you like to locate ffmpeg.exe?",
                         AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -1041,6 +1051,7 @@ namespace FFmpegAssistant
                     TaskbarProgress.SetError(this, 100, 100);
                     SetStatus($"Error: {ex.Message}", StatusLevel.Error);
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
+                    TaskbarFlash.FlashIfInactive(this);
                     MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     LogError(fileName, message, logFile);
                 }
