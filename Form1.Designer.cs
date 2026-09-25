@@ -370,7 +370,7 @@ namespace FFmpegAssistant
             groupBox1.Size = new Size(895, 122);
             groupBox1.TabIndex = 1;
             groupBox1.TabStop = false;
-            groupBox1.Text = "Auto suggest folder and file name";
+            groupBox1.Text = "Auto-Suggest Folder and File Name";
             // 
             // txtYear
             // 
