@@ -107,7 +107,7 @@ namespace FFmpegAssistant
 
             if (!string.Equals(Path.GetExtension(ofd.FileName), ".wav", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show("Audio file must be of the type WAV.", "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The sound file must be a WAV file.", Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -143,7 +143,7 @@ namespace FFmpegAssistant
                 string customPath = txtCustomActionSoundFile.Text.Trim();
                 if (string.IsNullOrEmpty(customPath) || !string.Equals(Path.GetExtension(customPath), ".wav", StringComparison.OrdinalIgnoreCase))
                 {
-                    MessageBox.Show("Audio file must be of the type WAV.", "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("The sound file must be a WAV file.", Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }

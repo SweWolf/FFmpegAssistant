@@ -8,6 +8,8 @@ namespace FFmpegAssistant
 {
     public partial class Form1 : Form
     {
+        internal const string AppTitle = "FFmpeg Assistant"; // caption for every message box
+
         private TimeSpan _totalDuration = TimeSpan.Zero;
         private string? _lastOutputPath;
         private string? _lastLogFile;
@@ -335,7 +337,7 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Reacts to a finished download per the "Action When Download Finished" setting:
-        /// play a sound, show the "Done!" message box, or do nothing (status already shows "Done").
+        /// play a sound, show a "download is complete" message box, or do nothing (status already shows "Done").
         /// Skipped entirely if the user already asked to close the application.
         /// </summary>
         private void NotifyDownloadFinished()
@@ -345,7 +347,7 @@ namespace FFmpegAssistant
             switch (AppSettings.ActionWhenDownloadFinished)
             {
                 case "Message Box":
-                    MessageBox.Show("Done!", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("The download is complete.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     break;
                 case "None":
                     break;
@@ -569,7 +571,7 @@ namespace FFmpegAssistant
 
             if (string.IsNullOrEmpty(originalCommand) || string.IsNullOrEmpty(folder))
             {
-                MessageBox.Show("Please fill in all fields.", "Missing input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Please enter the command and the folder.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -611,7 +613,7 @@ namespace FFmpegAssistant
 
                 if (string.IsNullOrEmpty(fileName))
                 {
-                    MessageBox.Show("Could not determine a file name from the original command.", "Missing input", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("Could not determine a file name from the original command.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
@@ -631,13 +633,13 @@ namespace FFmpegAssistant
             // Illegal characters would make CreateDirectory throw, or FFmpeg fail with a cryptic exit code
             if (GetInvalidPathCharError(folder) is string folderError)
             {
-                MessageBox.Show(folderError, "FFmpeg Assistant", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(folderError, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 cboFolder.Focus();
                 return;
             }
             if (GetInvalidPathCharError(fileName) is string nameError)
             {
-                MessageBox.Show(nameError, "FFmpeg Assistant", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(nameError, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtFileName.Focus();
                 return;
             }
@@ -689,8 +691,8 @@ namespace FFmpegAssistant
             if (File.Exists(outputPath))
             {
                 var answer = MessageBox.Show(
-                    $"File already exists:\n{outputPath}\n\nOverwrite?",
-                    "File exists", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    $"The output file already exists:\n{outputPath}\n\nDo you want to overwrite it?",
+                    AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
 
                 if (answer != DialogResult.Yes)
                 {
@@ -776,7 +778,7 @@ namespace FFmpegAssistant
                         else
                         {
                             SetStatus("Download failed — an error occurred.", StatusLevel.Error);
-                            MessageBox.Show(message, "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             LogError(fileName, message, logFile);
                         }
                     }
@@ -823,7 +825,7 @@ namespace FFmpegAssistant
                                     $"The output file is empty (0 bytes):\n\n{partPath}\n\n" +
                                     "The download likely failed — e.g. blocked segments or an invalid source.\n" +
                                     "Check the log file for details.",
-                                    "Empty Output File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                                 continue;
                             }
 
@@ -895,7 +897,7 @@ namespace FFmpegAssistant
 
                                 var deleteAnswer = MessageBox.Show(
                                     $"The downloaded file appears to be corrupted:\n\n{validatePath}\n\nDo you want to delete the file?",
-                                    "File Corrupted", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                                    AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                                 if (deleteAnswer == DialogResult.Yes)
                                 {
@@ -911,7 +913,7 @@ namespace FFmpegAssistant
 
                                     var retryAnswer = MessageBox.Show(
                                         "Do you want to try to download again?",
-                                        "Retry Download", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                        AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
                                     if (retryAnswer == DialogResult.Yes)
                                     {
@@ -960,7 +962,7 @@ namespace FFmpegAssistant
                         {
                             var answer = MessageBox.Show(
                                 $"Download was cancelled.\n\nA partial file was saved:\n{downloadPath}\n\nDelete it?",
-                                "Cancelled", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
                             if (answer == DialogResult.Yes)
                             {
@@ -998,7 +1000,7 @@ namespace FFmpegAssistant
 
                     var answer = MessageBox.Show(
                         "FFmpeg was not found on this system.\n\nWould you like to locate ffmpeg.exe?",
-                        "FFmpeg Not Found", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                        AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                     if (answer == DialogResult.Yes)
                     {
@@ -1035,7 +1037,7 @@ namespace FFmpegAssistant
                     TaskbarProgress.SetError(this, 100, 100);
                     SetStatus($"Error: {ex.Message}", StatusLevel.Error);
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
-                    MessageBox.Show(message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     LogError(fileName, message, logFile);
                 }
                 finally
@@ -1070,7 +1072,7 @@ namespace FFmpegAssistant
         {
             if (_lastOutputPath == null || !File.Exists(_lastOutputPath))
             {
-                MessageBox.Show("File not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The downloaded file was not found.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             Process.Start(new ProcessStartInfo(_lastOutputPath) { UseShellExecute = true });
@@ -1208,7 +1210,7 @@ namespace FFmpegAssistant
             {
                 MessageBox.Show(
                     $"Could not probe the file:\n\n{ex.Message}\n\nMake sure ffprobe.exe is installed alongside ffmpeg.exe.",
-                    "Probe Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1216,7 +1218,7 @@ namespace FFmpegAssistant
             {
                 MessageBox.Show(
                     "No subtitle streams were found in the selected file.",
-                    "No Subtitles", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -1275,7 +1277,7 @@ namespace FFmpegAssistant
         {
             if (_lastLogFile == null || !File.Exists(_lastLogFile))
             {
-                MessageBox.Show("Log file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The log file was not found.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             Process.Start(new ProcessStartInfo(_lastLogFile) { UseShellExecute = true });
@@ -2031,7 +2033,7 @@ namespace FFmpegAssistant
                     "A download is in progress.\n\n" +
                     "If you close the application now, the partial file will be deleted.\n\n" +
                     "Close anyway?",
-                    "Download in Progress",
+                    AppTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Warning,
                     MessageBoxDefaultButton.Button2); // Cancel is the default

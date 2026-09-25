@@ -21,7 +21,7 @@ namespace FFmpegAssistant
             {
                 MessageBox.Show(
                     "Please select at least one location.",
-                    "No location selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -53,14 +53,14 @@ namespace FFmpegAssistant
                            + string.Join("\n", failed);
                 if (allUsers)
                     msg += "\n\nCreating shortcuts for all users requires administrator privileges.";
-                MessageBox.Show(msg, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(msg, Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             if (created.Count > 0)
             {
                 MessageBox.Show(
                     "Shortcut(s) created successfully:\n\n" + string.Join("\n", created),
-                    "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 DialogResult = DialogResult.OK;
                 Close();
             }
