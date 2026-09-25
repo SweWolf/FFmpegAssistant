@@ -2052,6 +2052,37 @@ namespace FFmpegAssistant
             base.OnFormClosing(e);
         }
 
+        // -------------------------------------------------------------------------
+        // Keyboard shortcuts
+        // -------------------------------------------------------------------------
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            Button? button = keyData switch
+            {
+                Keys.Control | Keys.O => btnOpenFile,
+                Keys.Control | Keys.Shift | Keys.O => btnOpenFolder,
+                Keys.Control | Keys.E => btnRun,
+                Keys.Alt | Keys.B => btnBrowseForFolder,
+                _ => null
+            };
+
+            if (button != null)
+            {
+                if (button.Enabled) button.PerformClick();
+                return true;
+            }
+
+            if (keyData == Keys.F6)
+            {
+                txtOriginalCommand.Focus();
+                txtOriginalCommand.SelectAll();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
         private void TryApplyTvShowHistory(string command)
         {
             if (string.IsNullOrWhiteSpace(command)) return;
