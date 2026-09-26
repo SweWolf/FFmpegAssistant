@@ -125,6 +125,10 @@ namespace FFmpegAssistant
 
             InitializeProgressGrid();
 
+#if DEBUG
+            AddDebugMenu();
+#endif
+
             // Clear the "download finished" taskbar flash as soon as the user is back in the app
             Activated += (s, _) => TaskbarFlash.Stop(this);
 
@@ -447,6 +451,54 @@ namespace FFmpegAssistant
         /// <summary>Empties the Status box and gives it back its idle (grey) look.</summary>
         private void ClearStatus() => SetStatus(string.Empty);
 
+#if DEBUG
+        // -------------------------------------------------------------------------
+        // Debug menu: only in Debug builds (Release builds don't contain this code)
+        // -------------------------------------------------------------------------
+
+        private CancellationTokenSource? _statusColorDemoCts;
+
+        private void AddDebugMenu()
+        {
+            var menuDebug = new ToolStripMenuItem("Debug");
+            menuDebug.DropDownItems.Add("Show Status Colors", null, (s, e) => _ = ShowStatusColorDemoAsync());
+            menuStrip.Items.Insert(menuStrip.Items.IndexOf(menuHelp), menuDebug);
+        }
+
+        /// <summary>
+        /// Shows each status level for 3 seconds through <see cref="SetStatus"/> (so exactly as a real
+        /// download would), then clears the Status box. Starting it again restarts it. Not during a download.
+        /// </summary>
+        private async Task ShowStatusColorDemoAsync()
+        {
+            if (_downloadRunning) return;
+            _statusColorDemoCts?.Cancel();
+            using var cts = _statusColorDemoCts = new CancellationTokenSource();
+            (string Text, StatusLevel Level)[] steps =
+            {
+                ("Connecting... (normal: grey)", StatusLevel.Info),
+                ("Validating downloaded file... (in progress: light yellow)", StatusLevel.InProgress),
+                ("Download failed — retrying (attempt 2 of 5)... (warning: light orange)", StatusLevel.Warning),
+                ("Download failed — an error occurred. (error: light red)", StatusLevel.Error),
+                ("Done (success: light green)", StatusLevel.Success),
+            };
+            try
+            {
+                foreach (var (text, level) in steps)
+                {
+                    SetStatus(text, level);
+                    await Task.Delay(3000, cts.Token);
+                }
+            }
+            catch (OperationCanceledException) { return; } // restarted, or a download took over the Status box
+            finally
+            {
+                if (_statusColorDemoCts == cts) _statusColorDemoCts = null;
+            }
+            ClearStatus();
+        }
+#endif
+
         /// <summary>
         /// Reacts to a finished download per the "Action When Download Finished" setting:
         /// play a sound, show a "download is complete" message box, or do nothing (status already shows "Done").
@@ -685,6 +737,9 @@ namespace FFmpegAssistant
             // same files (e.g. "the process cannot access the file" for the FFmpeg log).
             if (_downloadRunning) return;
             _downloadRunning = true;
+#if DEBUG
+            _statusColorDemoCts?.Cancel();
+#endif
             btnRun.Enabled = false;
             btnClear.Enabled = false;
             try
