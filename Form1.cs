@@ -25,6 +25,7 @@ namespace FFmpegAssistant
         private bool _commandSetByExtractFeature;
         private bool _settingExtractCommand;
         private string? _folderTextOnFocus;
+        private bool _downloadRunning; // from the Download click until the run has ended, including the M3U8 pre-fetch
 
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -676,6 +677,30 @@ namespace FFmpegAssistant
         }
 
         private async void btnRun_Click(object sender, EventArgs e)
+        {
+            // Disable Download and Clear right away: the M3U8 pre-fetch at the start of the run can take
+            // several seconds, and a second click meanwhile would start a second, parallel run on the
+            // same files (e.g. "the process cannot access the file" for the FFmpeg log).
+            if (_downloadRunning) return;
+            _downloadRunning = true;
+            btnRun.Enabled = false;
+            btnClear.Enabled = false;
+            try
+            {
+                await RunDownloadAsync();
+            }
+            finally
+            {
+                _downloadRunning = false;
+                if (!IsDisposed) // the window may have been closed at the end of a cancelled run
+                {
+                    btnRun.Enabled = true;
+                    btnClear.Enabled = true;
+                }
+            }
+        }
+
+        private async Task RunDownloadAsync()
         {
             txtStatus.Text = "";
 
