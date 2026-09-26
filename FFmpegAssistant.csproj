@@ -22,9 +22,10 @@
     <Content Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.ico" />
     <EmbeddedResource Include="Resources\FFmpegAssistant.png" />
-    <Content Include="Resources\*.wav">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Embedded, not copied next to the exe: the single-file release ships only the exe -->
+    <EmbeddedResource Include="Resources\*.wav">
+      <LogicalName>Sounds/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
