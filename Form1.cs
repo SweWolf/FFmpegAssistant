@@ -195,15 +195,13 @@ namespace FFmpegAssistant
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
-                txtStatus.Text = string.Empty;
-                txtStatus.ForeColor = SystemColors.WindowText;
+                ClearStatus();
                 if (!_settingExtractCommand)
                     _commandSetByExtractFeature = false;
             };
             txtFileName.TextChanged += (s, _) =>
             {
-                txtStatus.Text = string.Empty;
-                txtStatus.ForeColor = SystemColors.WindowText;
+                ClearStatus();
             };
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
@@ -416,37 +414,38 @@ namespace FFmpegAssistant
                 cell.Value = "";
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
-            txtStatus.Text = string.Empty;
-            txtStatus.ForeColor = SystemColors.WindowText;
+            ClearStatus();
             TaskbarProgress.Clear(this);
         }
 
         private void SetStatus(string message, StatusLevel level = StatusLevel.Info)
         {
-            Color color = AppSettings.ColorCodedStatusMessages
+            // Dark text on a light background color: colored text is hard to read for yellow and orange.
+            // Normal messages keep the grey (non-editable) background of the idle Status box.
+            Color back = AppSettings.ColorCodedStatusMessages
                 ? level switch
                 {
-                    StatusLevel.Success => Color.Green,
-                    StatusLevel.Warning => Color.Orange,
-                    StatusLevel.Error => Color.Red,
-                    // A pure yellow reads poorly on the white status box, so use a darker gold instead.
-                    StatusLevel.InProgress => Color.DarkGoldenrod,
-                    _ => SystemColors.WindowText,
+                    StatusLevel.InProgress => Color.FromArgb(255, 242, 168), // light yellow
+                    StatusLevel.Warning => Color.FromArgb(255, 216, 168),    // light orange
+                    StatusLevel.Error => Color.FromArgb(255, 199, 199),      // light red
+                    StatusLevel.Success => Color.FromArgb(200, 240, 200),    // light green
+                    _ => SystemColors.Control,
                 }
-                : SystemColors.WindowText;
+                : SystemColors.Control;
+            // Black on the fixed light colors (also in a dark/high-contrast theme); the theme's text color on grey
+            Color fore = back == SystemColors.Control ? SystemColors.ControlText : Color.Black;
 
-            if (InvokeRequired)
-                Invoke(() =>
-                {
-                    txtStatus.ForeColor = color;
-                    txtStatus.Text = message;
-                });
-            else
+            void Apply()
             {
-                txtStatus.ForeColor = color;
+                txtStatus.BackColor = back;
+                txtStatus.ForeColor = fore;
                 txtStatus.Text = message;
             }
+            if (InvokeRequired) Invoke(Apply); else Apply();
         }
+
+        /// <summary>Empties the Status box and gives it back its idle (grey) look.</summary>
+        private void ClearStatus() => SetStatus(string.Empty);
 
         /// <summary>
         /// Reacts to a finished download per the "Action When Download Finished" setting:
@@ -705,7 +704,7 @@ namespace FFmpegAssistant
 
         private async Task RunDownloadAsync()
         {
-            txtStatus.Text = "";
+            ClearStatus();
 
             string originalCommand = txtOriginalCommand.Text.Trim();
             string folder = cboFolder.Text.Trim();

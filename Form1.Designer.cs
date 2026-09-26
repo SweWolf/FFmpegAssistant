@@ -345,7 +345,7 @@ namespace FFmpegAssistant
             // txtStatus
             // 
             txtStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtStatus.BackColor = SystemColors.Window;
+            txtStatus.BackColor = SystemColors.Control;
             txtStatus.BorderStyle = BorderStyle.FixedSingle;
             txtStatus.Location = new Point(67, 692);
             txtStatus.Name = "txtStatus";
