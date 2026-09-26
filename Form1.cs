@@ -105,6 +105,17 @@ namespace FFmpegAssistant
             // Icon is set by the Designer via InitializeComponent (Form1.resx).
             // No override needed here — overriding can lose alpha channel transparency.
 
+            // The form starts maximized. Make the size it gets when restored fit the screen's working area
+            // (with display scaling the design size can be taller than the screen), centered.
+            // While maximized, Size returns the maximized size, so start from RestoreBounds.
+            var workArea = Screen.FromControl(this).WorkingArea;
+            var restoreSize = WindowState == FormWindowState.Maximized ? RestoreBounds.Size : Size;
+            int restoreWidth = Math.Min(restoreSize.Width, workArea.Width);
+            int restoreHeight = Math.Min(restoreSize.Height, workArea.Height);
+            Bounds = new Rectangle(workArea.X + (workArea.Width - restoreWidth) / 2,
+                                   workArea.Y + (workArea.Height - restoreHeight) / 2,
+                                   restoreWidth, restoreHeight);
+
             // Check for updates in the background — does not block startup
             if (AppSettings.CheckForUpdatesOnStartup == "Yes")
                 _ = CheckForUpdatesAsync();
@@ -229,6 +240,16 @@ namespace FFmpegAssistant
         private static readonly string[] GridLabels =
             { "Duration", "Frame", "FPS", "Size", "Time", "Bitrate", "Speed", "Elapsed" };
 
+        // The grid shows one Property/Value pair with 8 rows, or two pairs side by side with 4 rows
+        // each when the window is too short for 8 rows (e.g. with 125 % display scaling).
+        private readonly Dictionary<string, DataGridViewCell> _gridValueCells = new();
+        private bool _gridSideBySide;
+        private int _gridSingleWidth;   // grid width with one pair, after DPI/font scaling
+        private int _gridSingleHeight;  // grid height with 8 rows
+        private int _gridSideBySideHeight; // grid height with 4 rows
+        private int _gridGap;           // spacing above and below the grid, after DPI/font scaling
+        private bool _updatingLayout;
+
         private void InitializeProgressGrid()
         {
             dgvProgress.Font = new Font("Segoe UI", 10F);
@@ -250,52 +271,137 @@ namespace FFmpegAssistant
             // grid lines used elsewhere in the (light-background) body of the grid.
             dgvProgress.CellPainting += (s, e) =>
             {
-                if (e.RowIndex != -1 || e.ColumnIndex != 0 || e.Graphics == null) return;
+                if (e.RowIndex != -1 || e.ColumnIndex == dgvProgress.Columns.Count - 1 || e.Graphics == null) return;
                 e.Paint(e.CellBounds, DataGridViewPaintParts.All);
                 using var pen = new Pen(Color.FromArgb(150, 150, 150));
                 e.Graphics.DrawLine(pen, e.CellBounds.Right - 1, e.CellBounds.Top + 2, e.CellBounds.Right - 1, e.CellBounds.Bottom - 3);
                 e.Handled = true;
             };
 
-            var colProperty = new DataGridViewTextBoxColumn
-            {
-                HeaderText = "Property",
-                Name = "colProperty",
-                Width = 100,
-                ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
-            };
-            var colValue = new DataGridViewTextBoxColumn
-            {
-                HeaderText = "Value",
-                Name = "colValue",
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-                ReadOnly = true,
-                SortMode = DataGridViewColumnSortMode.NotSortable
-            };
-            dgvProgress.Columns.Add(colProperty);
-            dgvProgress.Columns.Add(colValue);
+            _gridSingleWidth = dgvProgress.Width;
+            _gridGap = dgvProgress.Top - btnRun.Bottom; // as placed in the Designer
+            ApplyGridLayout(sideBySide: true);
+            _gridSideBySideHeight = dgvProgress.Height;
+            ApplyGridLayout(sideBySide: false);
+            _gridSingleHeight = dgvProgress.Height;
 
-            foreach (string label in GridLabels)
-                dgvProgress.Rows.Add(label, "");
+            pnlContent.Resize += (s, _) => UpdateLayoutForHeight();
+            UpdateLayoutForHeight();
+
+            // Minimum height: everything visible with the grid side by side, but never taller than
+            // the screen's working area (on a small screen the scrollbar takes over below that).
+            // The positions are already DPI/font scaled, so this follows the display scaling.
+            int compactHeight = MeasureFixedHeight() + _gridSideBySideHeight
+                              + menuStrip.Height + (Height - ClientSize.Height);
+            MinimumSize = new Size(MinimumSize.Width,
+                                   Math.Min(compactHeight, Screen.FromControl(this).WorkingArea.Height));
+        }
+
+        /// <summary>
+        /// Height the content needs without the grid: the top part (down to the Download button, anchored
+        /// to the top), the spacing above and below the grid, and the bottom part (Status and below,
+        /// anchored to the bottom). Measured without the scroll offset.
+        /// </summary>
+        private int MeasureFixedHeight()
+        {
+            int scrollY = pnlContent.DisplayRectangle.Y;
+            int topPartHeight = btnRun.Bottom - scrollY;
+            int bottomPartHeight = pnlContent.DisplayRectangle.Height - (txtStatus.Top - scrollY);
+            return topPartHeight + 2 * _gridGap + bottomPartHeight;
+        }
+
+        /// <summary>
+        /// Rebuilds the grid with one Property/Value pair (8 rows) or two pairs side by side (4 rows),
+        /// keeping the values shown, and sizes the grid to exactly fit its rows.
+        /// </summary>
+        private void ApplyGridLayout(bool sideBySide)
+        {
+            var values = _gridValueCells.ToDictionary(kv => kv.Key, kv => kv.Value.Value?.ToString() ?? "");
+            _gridSideBySide = sideBySide;
+
+            dgvProgress.Rows.Clear();
+            dgvProgress.Columns.Clear();
+            int pairs = sideBySide ? 2 : 1;
+            for (int pair = 0; pair < pairs; pair++)
+            {
+                dgvProgress.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    HeaderText = "Property",
+                    Width = 100,
+                    ReadOnly = true,
+                    SortMode = DataGridViewColumnSortMode.NotSortable
+                });
+                dgvProgress.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    HeaderText = "Value",
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                    ReadOnly = true,
+                    SortMode = DataGridViewColumnSortMode.NotSortable,
+                    DividerWidth = pair < pairs - 1 ? 2 : 0 // separates the two pairs
+                });
+            }
+
+            _gridValueCells.Clear();
+            int rowCount = GridLabels.Length / pairs;
+            for (int r = 0; r < rowCount; r++)
+            {
+                var row = dgvProgress.Rows[dgvProgress.Rows.Add()];
+                for (int pair = 0; pair < pairs; pair++)
+                {
+                    string label = GridLabels[pair * rowCount + r];
+                    row.Cells[pair * 2].Value = label;
+                    row.Cells[pair * 2 + 1].Value = values.GetValueOrDefault(label, "");
+                    _gridValueCells[label] = row.Cells[pair * 2 + 1];
+                }
+            }
 
             // Shrink the grid to exactly fit its rows — no grey empty space below
-            int exactHeight = dgvProgress.ColumnHeadersHeight
-                            + dgvProgress.Rows.Cast<DataGridViewRow>().Sum(r => r.Height)
-                            + 2; // border
-            dgvProgress.Height = exactHeight;
+            dgvProgress.Width = _gridSingleWidth * pairs;
+            dgvProgress.Height = dgvProgress.ColumnHeadersHeight
+                               + dgvProgress.Rows.Cast<DataGridViewRow>().Sum(r => r.Height)
+                               + 2; // border
+        }
+
+        /// <summary>
+        /// Places the grid just above Status and keeps the top part (down to the Download button) and the
+        /// bottom part (grid, Status and below) from overlapping when the window is short: first puts the
+        /// grid's rows side by side, then, if that is not enough, makes the content scrollable.
+        /// </summary>
+        private void UpdateLayoutForHeight()
+        {
+            if (_updatingLayout || _gridSingleHeight == 0) return;
+            _updatingLayout = true;
+            try
+            {
+                int fixedHeight = MeasureFixedHeight();
+                int available = pnlContent.ClientSize.Height;
+
+                bool singleFits = fixedHeight + _gridSingleHeight <= available;
+                bool roomForTwo = pnlContent.ClientSize.Width >= 2 * dgvProgress.Left + 2 * _gridSingleWidth;
+                bool sideBySide = !singleFits && roomForTwo;
+                if (sideBySide != _gridSideBySide)
+                    ApplyGridLayout(sideBySide);
+
+                int needed = fixedHeight + dgvProgress.Height;
+                pnlContent.AutoScrollMinSize = needed > available ? new Size(0, needed) : Size.Empty;
+
+                // Keep the grid just above Status: it shows FFmpeg's output, so it belongs with the
+                // status part. Any extra height goes between the Download button and the grid.
+                dgvProgress.Top = txtStatus.Top - _gridGap - dgvProgress.Height;
+            }
+            finally
+            {
+                // A resized ComboBox selects its text (e.g. when the scrollbar appears): undo that
+                if (!cboFolder.Focused)
+                    cboFolder.SelectionLength = 0;
+                _updatingLayout = false;
+            }
         }
 
         private void UpdateGridRow(string label, string value)
         {
-            foreach (DataGridViewRow row in dgvProgress.Rows)
-            {
-                if (row.Cells["colProperty"].Value?.ToString() == label)
-                {
-                    row.Cells["colValue"].Value = value;
-                    return;
-                }
-            }
+            if (_gridValueCells.TryGetValue(label, out var cell))
+                cell.Value = value;
         }
 
         private void ResetProgress()
@@ -305,8 +411,8 @@ namespace FFmpegAssistant
             _isValidating = false;
             _m3u8SegmentsOpened = 0;
             _speedSamples.Clear();
-            foreach (DataGridViewRow row in dgvProgress.Rows)
-                row.Cells["colValue"].Value = "";
+            foreach (var cell in _gridValueCells.Values)
+                cell.Value = "";
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
             txtStatus.Text = string.Empty;
