@@ -352,7 +352,10 @@ namespace FFmpegAssistant
                 dgvProgress.Columns.Add(new DataGridViewTextBoxColumn
                 {
                     HeaderText = "Property",
-                    Width = 100,
+                    // Fits its widest text (the bold header or a label) at any display scaling, but is
+                    // never narrower than 100 px at 100 % (a width set in code isn't scaled by WinForms)
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+                    MinimumWidth = LogicalToDeviceUnits(100),
                     ReadOnly = true,
                     SortMode = DataGridViewColumnSortMode.NotSortable
                 });
