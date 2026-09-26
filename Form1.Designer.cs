@@ -490,7 +490,7 @@ namespace FFmpegAssistant
             chkEnableWatchingWhileDownloading.Size = new Size(285, 25);
             chkEnableWatchingWhileDownloading.TabIndex = 4;
             chkEnableWatchingWhileDownloading.Text = "Enable Watching While Downloading";
-            toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, "Downloads as a .ts file first so you can watch while downloading, then converts to the final format automatically");
+            toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, "Downloads as a .ts file first so you can watch while downloading, then converts to the final format automatically.\nNo sound, message box or taskbar flash when the download is finished, unless you uncheck this box before then (errors are always shown).");
             chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
             // 
             // label6

@@ -451,11 +451,14 @@ namespace FFmpegAssistant
         /// <summary>
         /// Reacts to a finished download per the "Action When Download Finished" setting:
         /// play a sound, show a "download is complete" message box, or do nothing (status already shows "Done").
-        /// Skipped entirely if the user already asked to close the application.
+        /// Skipped entirely if the user already asked to close the application, or in watch mode while
+        /// "Enable Watching While Downloading" is still checked: the user is watching the video, so only
+        /// the status shows "Done" (errors are still reported). Unchecking it during the download brings
+        /// the usual notification back; checking it during a normal download doesn't silence that one.
         /// </summary>
-        private void NotifyDownloadFinished()
+        private void NotifyDownloadFinished(bool watchMode)
         {
-            if (_closeAfterCancel) return;
+            if (_closeAfterCancel || (watchMode && chkEnableWatchingWhileDownloading.Checked)) return;
 
             TaskbarFlash.FlashIfInactive(this);
 
@@ -991,7 +994,7 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done", StatusLevel.Success);
-                            NotifyDownloadFinished();
+                            NotifyDownloadFinished(watchMode);
                             continue;
                         }
 
@@ -1027,7 +1030,7 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done", StatusLevel.Success);
-                            NotifyDownloadFinished();
+                            NotifyDownloadFinished(watchMode);
                         }
                         else
                         {
