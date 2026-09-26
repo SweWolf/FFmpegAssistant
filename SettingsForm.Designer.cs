@@ -245,6 +245,7 @@ namespace FFmpegAssistant
             // 
             // cboActionWhenDownloadFinished
             // 
+            cboActionWhenDownloadFinished.DropDownStyle = ComboBoxStyle.DropDownList;
             cboActionWhenDownloadFinished.FormattingEnabled = true;
             cboActionWhenDownloadFinished.Items.AddRange(new object[] { "Play a Sound", "Message Box", "None" });
             cboActionWhenDownloadFinished.Location = new Point(13, 47);
