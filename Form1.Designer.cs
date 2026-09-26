@@ -49,6 +49,7 @@ namespace FFmpegAssistant
             menuTools = new ToolStripMenuItem();
             menuCreateShortcut = new ToolStripMenuItem();
             menuSettings = new ToolStripMenuItem();
+            mnuValidateVideoFile = new ToolStripMenuItem();
             subtitlesToolStripMenuItem = new ToolStripMenuItem();
             mnuExtractSubtitleFile = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
@@ -261,7 +262,7 @@ namespace FFmpegAssistant
             // 
             // menuTools
             // 
-            menuTools.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut, menuSettings });
+            menuTools.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut, menuSettings, mnuValidateVideoFile });
             menuTools.Name = "menuTools";
             menuTools.Size = new Size(47, 20);
             menuTools.Text = "Tools";
@@ -279,6 +280,13 @@ namespace FFmpegAssistant
             menuSettings.Size = new Size(165, 22);
             menuSettings.Text = "Settings";
             menuSettings.Click += menuSettings_Click_1;
+            // 
+            // mnuValidateVideoFile
+            // 
+            mnuValidateVideoFile.Name = "mnuValidateVideoFile";
+            mnuValidateVideoFile.Size = new Size(165, 22);
+            mnuValidateVideoFile.Text = "Validate Video File...";
+            mnuValidateVideoFile.Click += mnuValidateVideoFile_Click;
             // 
             // subtitlesToolStripMenuItem
             // 
@@ -594,6 +602,7 @@ namespace FFmpegAssistant
         private ToolStripMenuItem menuAbout;
         private ToolStripMenuItem menuNewVersion;
         private ToolStripMenuItem menuSettings;
+        private ToolStripMenuItem mnuValidateVideoFile;
         private Button btnOpenLogFile;
         private Label lblEstimatedRemaining;
         private Button btnClear;

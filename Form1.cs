@@ -16,6 +16,9 @@ namespace FFmpegAssistant
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
         private bool _isValidating;
+        private bool _validationOnly; // Tools > Validate Video File: no download, progress bar runs 0-100 %
+        private string? _validationCommand; // the last validation's command, shown in the Command box
+        private string? _validationFileName; // the validated file's name, shown in File Name
         private int _totalM3u8Segments;
         private int _m3u8SegmentsOpened;
         private M3u8ContentType _m3u8ContentType;
@@ -174,6 +177,16 @@ namespace FFmpegAssistant
             txtOriginalCommand.TextChanged += (s, _) =>
             {
                 string cmd = txtOriginalCommand.Text.Trim();
+                if (IsValidationCommandShown(cmd)) return; // not a download: nothing to auto-suggest
+                if (_validationCommand != null)
+                {
+                    // The validation command was replaced: a new download must not target the validated
+                    // file (only the overwrite question would protect it), so clear its name.
+                    if (string.Equals(txtFileName.Text.Trim(), _validationFileName, StringComparison.OrdinalIgnoreCase))
+                        txtFileName.Text = "";
+                    _validationCommand = null;
+                    _validationFileName = null;
+                }
                 if (IsBarUrl(cmd) || IsLocalM3u8Path(cmd))
                 {
                     string stripped = cmd.Trim('"');
@@ -193,7 +206,11 @@ namespace FFmpegAssistant
                 }
             };
             // Also trigger when the box loses focus (catches manual edits)
-            txtOriginalCommand.Leave += (s, _) => TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
+            txtOriginalCommand.Leave += (s, _) =>
+            {
+                if (!IsValidationCommandShown(txtOriginalCommand.Text.Trim()))
+                    TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
+            };
 
             // Clear status when the user starts editing the input fields.
             // Also clear the extract-feature flag when the user replaces the command themselves.
@@ -582,7 +599,8 @@ namespace FFmpegAssistant
                         int.Parse(dm.Groups[4].Value.PadRight(3, '0')[..3]));
 
                     Invoke(() => UpdateGridRow("Duration", _totalDuration.ToString(@"hh\:mm\:ss")));
-                    SetStatus("Starting download...");
+                    if (!_isValidating)
+                        SetStatus("Starting download...");
                     return;
                 }
             }
@@ -626,8 +644,11 @@ namespace FFmpegAssistant
 
                 if (_isValidating)
                 {
-                    // Last slice of the bar; validation's own live progress drives the estimate directly.
-                    percent = DownloadPhaseWeightPercent + phasePercent * (100 - DownloadPhaseWeightPercent) / 100;
+                    // Last slice of the bar (or all of it for Tools > Validate Video File);
+                    // validation's own live progress drives the estimate directly.
+                    percent = _validationOnly
+                        ? phasePercent
+                        : DownloadPhaseWeightPercent + phasePercent * (100 - DownloadPhaseWeightPercent) / 100;
                     if (phaseRemainingSecs.HasValue)
                         estimatedRemaining = TimeSpan.FromSeconds(phaseRemainingSecs.Value).ToString(@"h\:mm\:ss");
                 }
@@ -768,6 +789,15 @@ namespace FFmpegAssistant
             if (string.IsNullOrEmpty(originalCommand) || string.IsNullOrEmpty(folder))
             {
                 MessageBox.Show("Please enter the command and the folder.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (IsValidationCommandShown(originalCommand))
+            {
+                MessageBox.Show("The Command box shows the command of the last validation.\n\n" +
+                                "Paste a download command to start a download.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtOriginalCommand.Focus();
                 return;
             }
 
@@ -1330,7 +1360,13 @@ namespace FFmpegAssistant
             Process.Start(new ProcessStartInfo(_lastOutputPath) { UseShellExecute = true });
         }
 
-        private void btnClear_Click(object sender, EventArgs e)
+        private void btnClear_Click(object sender, EventArgs e) => ClearForm();
+
+        /// <summary>
+        /// Empties the form for a new job (the Clear button): command, folder, file name, the
+        /// Movie/TV Show auto-suggest fields, progress, and the Open File / Open Log File targets.
+        /// </summary>
+        private void ClearForm()
         {
             txtOriginalCommand.Clear();
             cboFolder.SelectedIndex = 0;
@@ -1418,6 +1454,145 @@ namespace FFmpegAssistant
         {
             using var form = new SettingsForm();
             form.ShowDialog(this);
+        }
+
+        /// <summary>FFmpeg arguments that validate a file: decode everything, write nothing.</summary>
+        private static string ValidationArguments(string filePath) => $"-i \"{filePath}\" -f null -";
+
+        /// <summary>
+        /// True if the Command box still shows the last validation's command (not a download command),
+        /// so auto-suggest and Download leave it alone.
+        /// </summary>
+        private bool IsValidationCommandShown(string command) =>
+            _validationCommand != null && string.Equals(command, _validationCommand, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Tools > Validate Video File: checks any video file with the same FFmpeg decode that runs at the
+        /// end of a download (<see cref="ValidateVideoFileAsync"/>), with the grid, progress bar, Cancel,
+        /// sleep blocking and taskbar progress working as during a download. Never changes the file.
+        /// </summary>
+        private async void mnuValidateVideoFile_Click(object sender, EventArgs e)
+        {
+            if (_downloadRunning) return;
+
+            string folder = cboFolder.Text.Trim();
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Validate Video File",
+                Filter = "Video files|*.mp4;*.mkv;*.ts;*.m4v;*.mov;*.avi;*.webm;*.wmv;*.flv;*.mpg;*.mpeg;*.m2ts|" +
+                         "All files (*.*)|*.*",
+                InitialDirectory = Directory.Exists(folder) ? folder : string.Empty
+            };
+            if (ofd.ShowDialog(this) != DialogResult.OK) return;
+            string filePath = ofd.FileName;
+
+            // Start from an empty form, as with Clear, so nothing from the previous download (Movie/TV Show,
+            // Title, Season/Episode) is left. Then show the command that runs and the validated file; the
+            // user chose this action, so replacing the boxes is fine. The command is set first, so
+            // auto-suggest (which checks for it) leaves Folder and File Name alone.
+            ClearForm();
+            _validationCommand = "ffmpeg " + ValidationArguments(filePath);
+            txtOriginalCommand.Text = _validationCommand;
+            cboFolder.Text = Path.GetDirectoryName(filePath) ?? string.Empty;
+            txtFileName.Text = Path.GetFileName(filePath);
+            _validationFileName = txtFileName.Text;
+
+            string logsFolder = Path.Combine(AppLogFolder, "Logs");
+            Directory.CreateDirectory(logsFolder);
+            // Own log name, so it doesn't overwrite the download log of a file with the same name
+            string logFile = Path.Combine(logsFolder, Path.GetFileNameWithoutExtension(filePath) + " - validation.txt");
+
+            _downloadRunning = true;
+#if DEBUG
+            _statusColorDemoCts?.Cancel();
+#endif
+            ResetProgress();
+            _totalM3u8Segments = 0;
+            _progressStarted = true; // skip the "Fetching stream information..." / "Downloading..." texts
+            _isValidating = true;
+            _validationOnly = true;
+            _cts = new CancellationTokenSource();
+            _lastOutputPath = filePath; // Open File opens the validated file
+            _lastLogFile = logFile;
+            btnRun.Enabled = false;
+            btnClear.Enabled = false;
+            btnCancel.Enabled = true;
+            btnOpenFile.Enabled = true;
+            btnOpenLogFile.Enabled = true;
+            mnuValidateVideoFile.Enabled = false;
+            txtAttempt.Text = "";
+
+            SetStatus("Validating video file...", StatusLevel.InProgress);
+            WriteAppLog($"VALIDATE : {filePath} (Tools > Validate Video File)");
+            using var sleepBlocker = SleepBlocker.Begin();
+            try
+            {
+                bool valid = await ValidateVideoFileAsync(filePath, logFile, _cts.Token, okIfFfmpegMissing: false);
+                if (valid)
+                {
+                    progressBar.Value = 100;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                    TaskbarProgress.Clear(this);
+                    WriteAppLog("VALIDATE : OK");
+                    SetStatus("The video file is OK.", StatusLevel.Success);
+                }
+                else
+                {
+                    TaskbarProgress.SetError(this, 100, 100);
+                    WriteAppLog("VALIDATE : FAILED — file is corrupted or unreadable");
+                    SetStatus("The video file is corrupted or unreadable. See the log file for details.", StatusLevel.Error);
+                }
+                TaskbarFlash.FlashIfInactive(this);
+            }
+            catch (OperationCanceledException)
+            {
+                progressBar.Value = 0;
+                lblEstimatedRemaining.Text = "Estimated remaining time: —";
+                TaskbarProgress.Clear(this);
+                WriteAppLog("VALIDATE : CANCELLED by user");
+                SetStatus("Validation cancelled.");
+            }
+            catch (System.ComponentModel.Win32Exception win32ex)
+                when (win32ex.NativeErrorCode == 2 || win32ex.NativeErrorCode == 3)
+            {
+                progressBar.Value = 0;
+                TaskbarProgress.Clear(this);
+                WriteAppLog($"VALIDATE : FFMPEG NOT FOUND — {win32ex.Message}");
+                SetStatus("FFmpeg not found — validation cancelled.", StatusLevel.Error);
+                TaskbarFlash.FlashIfInactive(this);
+                MessageBox.Show("FFmpeg was not found on this system.\n\nYou can set the path to ffmpeg.exe in Tools > Settings.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                progressBar.Value = 0;
+                TaskbarProgress.SetError(this, 100, 100);
+                WriteAppLog($"VALIDATE : EXCEPTION — {ex.Message}");
+                SetStatus($"Error: {ex.Message}", StatusLevel.Error);
+                TaskbarFlash.FlashIfInactive(this);
+                MessageBox.Show($"Unexpected error:\n{ex.Message}", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _cts.Dispose();
+                _cts = null;
+                _isValidating = false;
+                _validationOnly = false;
+                _downloadRunning = false;
+                if (!IsDisposed)
+                {
+                    btnRun.Enabled = true;
+                    btnClear.Enabled = true;
+                    btnCancel.Enabled = false;
+                    mnuValidateVideoFile.Enabled = true;
+                }
+                // If the user closed the window during the validation, finish closing now
+                if (_closeAfterCancel)
+                {
+                    _closeAfterCancel = false;
+                    Close();
+                }
+            }
         }
 
         private async void mnuExtractSubtitleFile_Click(object sender, EventArgs e)
@@ -1755,8 +1930,11 @@ namespace FFmpegAssistant
         /// during the decode, instead of the check running silently in the background.
         /// Returns true if the file is OK, false if it is corrupted or unreadable.
         /// Cancelling throws <see cref="OperationCanceledException"/> (it must not count as "OK").
+        /// If FFmpeg can't be run, <paramref name="okIfFfmpegMissing"/> decides: true after a download
+        /// (don't report a good download as broken), false for Tools > Validate Video File (rethrows).
         /// </summary>
-        private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken)
+        private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken,
+                                                        bool okIfFfmpegMissing = true)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
                 return false;
@@ -1764,10 +1942,10 @@ namespace FFmpegAssistant
             try
             {
                 var (exitCode, errorLines) = await RunFfmpegAsync(
-                    $"-i \"{filePath}\" -f null -", logFile, cancellationToken);
+                    ValidationArguments(filePath), logFile, cancellationToken);
                 return exitCode == 0 && errorLines.Count == 0;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && okIfFfmpegMissing)
             {
                 // FFmpeg not available — skip validation rather than falsely reporting an error
                 return true;
@@ -1870,6 +2048,7 @@ namespace FFmpegAssistant
         private void SuggestNextEpisode(string folder)
         {
             if (_commandSetByExtractFeature) return;
+            if (IsValidationCommandShown(txtOriginalCommand.Text.Trim())) return; // Folder/File Name show the validated file
             if (!Directory.Exists(folder))
             {
                 SyncShowNameToFolder(folder);
@@ -2282,9 +2461,13 @@ namespace FFmpegAssistant
             if (_cts != null)
             {
                 var result = MessageBox.Show(
-                    "A download is in progress.\n\n" +
-                    "If you close the application now, the partial file will be deleted.\n\n" +
-                    "Close anyway?",
+                    _validationOnly
+                        ? "A video file is being validated.\n\n" +
+                          "If you close the application now, the validation is cancelled (the video file is not changed).\n\n" +
+                          "Close anyway?"
+                        : "A download is in progress.\n\n" +
+                          "If you close the application now, the partial file will be deleted.\n\n" +
+                          "Close anyway?",
                     AppTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Warning,
