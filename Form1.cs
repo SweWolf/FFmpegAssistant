@@ -1754,6 +1754,7 @@ namespace FFmpegAssistant
         /// existing progress parsing drives the progress bar and estimated-remaining-time label
         /// during the decode, instead of the check running silently in the background.
         /// Returns true if the file is OK, false if it is corrupted or unreadable.
+        /// Cancelling throws <see cref="OperationCanceledException"/> (it must not count as "OK").
         /// </summary>
         private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken)
         {
@@ -1766,7 +1767,7 @@ namespace FFmpegAssistant
                     $"-i \"{filePath}\" -f null -", logFile, cancellationToken);
                 return exitCode == 0 && errorLines.Count == 0;
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // FFmpeg not available — skip validation rather than falsely reporting an error
                 return true;
