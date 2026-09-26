@@ -212,17 +212,21 @@ namespace FFmpegAssistant
                     TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
             };
 
-            // Clear status when the user starts editing the input fields.
+            // Clear status when the user starts editing the input fields (e.g. an old "Done" or error),
+            // but not during a download or validation: then Status shows the running job's progress,
+            // and editing Title/Year/Season/Episode would otherwise empty it via the suggested file name.
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
-                ClearStatus();
+                if (!_downloadRunning)
+                    ClearStatus();
                 if (!_settingExtractCommand)
                     _commandSetByExtractFeature = false;
             };
             txtFileName.TextChanged += (s, _) =>
             {
-                ClearStatus();
+                if (!_downloadRunning)
+                    ClearStatus();
             };
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
