@@ -79,27 +79,37 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Plays a sound given either a bundled sound's file name or a full path to a custom
-        /// .wav file elsewhere. Falls back to <see cref="DefaultSoundFileName"/> (or the first
-        /// bundled sound, if that one is missing) when unresolvable.
+        /// .wav file elsewhere. So that something is always heard, it falls back to
+        /// <see cref="DefaultSoundFileName"/>, then to any other bundled sound, and last to the
+        /// Windows system sound, when a sound is missing or can't be played (e.g. a custom file that
+        /// was deleted, or isn't a valid .wav).
         /// </summary>
         public static void Play(string fileNameOrPath)
         {
+            if (TryPlay(fileNameOrPath) || TryPlay(DefaultSoundFileName)) return;
+            foreach (var sound in GetAvailableSounds())
+                if (TryPlay(sound.FileName)) return;
+            try { SystemSounds.Asterisk.Play(); } catch { /* never crash the host app */ }
+        }
+
+        private static bool TryPlay(string fileNameOrPath)
+        {
+            SoundPlayer? player = null;
             try
             {
-                SoundPlayer? player = CreatePlayer(fileNameOrPath) ?? CreatePlayer(DefaultSoundFileName);
-                if (player == null)
-                {
-                    var sounds = GetAvailableSounds();
-                    if (sounds.Count == 0) return;
-                    player = CreatePlayer(sounds[0].FileName);
-                    if (player == null) return;
-                }
-
+                player = CreatePlayer(fileNameOrPath);
+                if (player == null) return false;
+                player.Load(); // reads the sound now, so a missing or unreadable file fails here
+                player.Play(); // asynchronous; throws if the file isn't a valid .wav
                 _currentPlayer?.Dispose();
                 _currentPlayer = player;
-                player.Play(); // asynchronous
+                return true;
             }
-            catch { /* never crash the host app */ }
+            catch
+            {
+                player?.Dispose();
+                return false;
+            }
         }
 
         private static SoundPlayer? CreatePlayer(string fileNameOrPath)
@@ -110,10 +120,7 @@ namespace FFmpegAssistant
                 return File.Exists(fileNameOrPath) ? new SoundPlayer(fileNameOrPath) : null;
 
             Stream? stream = ThisAssembly.GetManifestResourceStream(ResourcePrefix + fileNameOrPath);
-            if (stream == null) return null;
-            var player = new SoundPlayer(stream);
-            player.Load(); // read the whole sound into memory now
-            return player;
+            return stream == null ? null : new SoundPlayer(stream);
         }
     }
 }
