@@ -29,6 +29,7 @@ namespace FFmpegAssistant
         private bool _settingExtractCommand;
         private string? _folderTextOnFocus;
         private bool _downloadRunning; // from the Download click until the run has ended, including the M3U8 pre-fetch
+        private bool _runInWatchMode;  // the running download was started with "Enable Watching While Downloading"
 
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -692,8 +693,10 @@ namespace FFmpegAssistant
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
                 TaskbarProgress.SetNormal(this, percent, 100);
 
-                // Enable Open File as soon as the download file appears on disk (watch mode)
-                if (!btnOpenFile.Enabled && _lastOutputPath != null && File.Exists(_lastOutputPath))
+                // Enable Open File as soon as the download file appears on disk, in watch mode only: a normal
+                // download's (part) file isn't finished until it has been validated and renamed. Uses the mode
+                // the run started with, so toggling the checkbox during the run doesn't change it.
+                if (_runInWatchMode && !btnOpenFile.Enabled && _lastOutputPath != null && File.Exists(_lastOutputPath))
                     btnOpenFile.Enabled = true;
             });
         }
@@ -902,6 +905,7 @@ namespace FFmpegAssistant
             // the file is renamed to the final name only after successful validation.
             // SRT files use the same (part) protection but skip watch mode and video validation.
             bool watchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt;
+            _runInWatchMode = watchMode;
             string partPath = Path.Combine(folder,
                 Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
             string downloadPath = watchMode
@@ -992,7 +996,8 @@ namespace FFmpegAssistant
 
                     var (exitCode, errorLines) = await RunFfmpegAsync(currentArguments, logFile, _cts.Token);
 
-                    btnOpenFile.Enabled = File.Exists(downloadPath);
+                    // Watch mode: the .ts can be opened; normal mode: wait until the file is validated and renamed
+                    btnOpenFile.Enabled = watchMode && File.Exists(downloadPath);
 
                     if (exitCode != 0)
                     {
@@ -1400,12 +1405,30 @@ namespace FFmpegAssistant
 
         private void btnOpenFolder_Click_1(object sender, EventArgs e)
         {
-            string folder = cboFolder.Text.Trim();
-            string fileName = txtFileName.Text.Trim();
+            // During a download or validation: the running job's folder, not what the fields show now
+            // (they stay editable to prepare the next download, and auto-suggest may change them).
+            // Otherwise: the folder and file name in the fields.
+            string folder, fileName;
+            if (_downloadRunning && _lastOutputPath != null)
+            {
+                folder = Path.GetDirectoryName(_lastOutputPath) ?? string.Empty;
+                fileName = Path.GetFileName(_lastOutputPath);
+            }
+            else
+            {
+                folder = cboFolder.Text.Trim();
+                fileName = txtFileName.Text.Trim();
+            }
 
-            // If we can build a path from the current UI fields and the file already exists,
-            // open Explorer with the file pre-selected — works during and after a download
-            if (!string.IsNullOrEmpty(folder) && !string.IsNullOrEmpty(fileName))
+            // Explorer opens a default folder (e.g. Documents) for a folder that doesn't exist
+            if (!Directory.Exists(folder))
+            {
+                MessageBox.Show($"The folder \"{folder}\" does not exist.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // If the file already exists, open Explorer with it pre-selected
+            if (!string.IsNullOrEmpty(fileName))
             {
                 string candidate = Path.Combine(folder, fileName);
                 if (File.Exists(candidate))
@@ -1515,6 +1538,7 @@ namespace FFmpegAssistant
             _progressStarted = true; // skip the "Fetching stream information..." / "Downloading..." texts
             _isValidating = true;
             _validationOnly = true;
+            _runInWatchMode = false;
             _cts = new CancellationTokenSource();
             _lastOutputPath = filePath; // Open File opens the validated file
             _lastLogFile = logFile;
