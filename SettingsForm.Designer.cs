@@ -128,7 +128,7 @@ namespace FFmpegAssistant
             groupBox2.Size = new Size(472, 115);
             groupBox2.TabIndex = 3;
             groupBox2.TabStop = false;
-            groupBox2.Text = "Auto Retry On Download Failure";
+            groupBox2.Text = "Auto-Retry on Download Failure";
             // 
             // label3
             // 
@@ -166,7 +166,7 @@ namespace FFmpegAssistant
             groupBox3.Size = new Size(470, 89);
             groupBox3.TabIndex = 6;
             groupBox3.TabStop = false;
-            groupBox3.Text = "Check for new version";
+            groupBox3.Text = "Check for New Version";
             // 
             // cboNewVersionCheck
             // 
@@ -185,7 +185,7 @@ namespace FFmpegAssistant
             label4.Name = "label4";
             label4.Size = new Size(177, 15);
             label4.TabIndex = 0;
-            label4.Text = "Check for new version at startup";
+            label4.Text = "Check for New Version at Startup";
             // 
             // groupBox1
             // 
