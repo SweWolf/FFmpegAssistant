@@ -33,7 +33,7 @@ namespace FFmpegAssistant
             grpLocation.Size = new Size(356, 82);
             grpLocation.TabIndex = 0;
             grpLocation.TabStop = false;
-            grpLocation.Text = "Create shortcut on:";
+            grpLocation.Text = "Create Shortcut On";
 
             // chkDesktop
             chkDesktop.AutoSize = true;
@@ -61,7 +61,7 @@ namespace FFmpegAssistant
             grpFor.Size = new Size(356, 82);
             grpFor.TabIndex = 1;
             grpFor.TabStop = false;
-            grpFor.Text = "For:";
+            grpFor.Text = "For";
 
             // rdoCurrentUser
             rdoCurrentUser.AutoSize = true;
@@ -70,7 +70,7 @@ namespace FFmpegAssistant
             rdoCurrentUser.Name = "rdoCurrentUser";
             rdoCurrentUser.TabIndex = 0;
             rdoCurrentUser.TabStop = true;
-            rdoCurrentUser.Text = "Current user only";
+            rdoCurrentUser.Text = "Current User Only";
             rdoCurrentUser.UseVisualStyleBackColor = true;
 
             // rdoAllUsers
@@ -78,7 +78,7 @@ namespace FFmpegAssistant
             rdoAllUsers.Location = new Point(15, 53);
             rdoAllUsers.Name = "rdoAllUsers";
             rdoAllUsers.TabIndex = 1;
-            rdoAllUsers.Text = "All users (may require administrator privileges)";
+            rdoAllUsers.Text = "All Users (May Require Administrator Rights)";
             rdoAllUsers.UseVisualStyleBackColor = true;
 
             // lblNote

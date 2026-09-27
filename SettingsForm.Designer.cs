@@ -64,7 +64,7 @@ namespace FFmpegAssistant
             lblFfmpegPath.Name = "lblFfmpegPath";
             lblFfmpegPath.Size = new Size(110, 15);
             lblFfmpegPath.TabIndex = 0;
-            lblFfmpegPath.Text = "Path to ffmpeg.exe:";
+            lblFfmpegPath.Text = "Path to ffmpeg.exe";
             // 
             // txtFfmpegPath
             // 
@@ -138,7 +138,7 @@ namespace FFmpegAssistant
             label3.Name = "label3";
             label3.Size = new Size(136, 15);
             label3.TabIndex = 2;
-            label3.Text = "Leave empty to not retry";
+            label3.Text = "Leave empty for no retries";
             // 
             // txtNumberOfDownloadAttempts
             // 

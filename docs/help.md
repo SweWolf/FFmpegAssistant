@@ -286,7 +286,7 @@ at the right end of the menu bar. Click it to open the download page.
 - **Desktop**
 - **Start Menu (Programs)**
 
-Choose whether the shortcuts are for the **Current user only** or for **All users**. All users may
+Choose whether the shortcuts are for the **Current User Only** or for **All Users**. All users may
 require administrator rights.
 
 You can also start FFmpeg Assistant from the command line with a web address. It is put into
@@ -313,8 +313,9 @@ FFmpeg Assistant keeps its files in `%AppData%\SweWolfSoftware\FFmpegAssist`:
 
 - `FFmpegAssistant.log`: a short line for every download: the command, the result, retries and
   so on. It is kept short automatically.
-- `Logs\<file name>.txt`: FFmpeg's report of each download. Click **Open Log File** to open the
-  latest one.
+- `Logs\<file name>.txt`: FFmpeg's report of each download (the last attempt). Click
+  **Open Log File** to open the latest one. The check of the file after the download is not
+  included.
 - `Logs\<file name> - validation.txt`: FFmpeg's report of each
   [Validate Video File](#validate-video-file) check.
 - `Logs\errors.log`: a list of the downloads that failed.
