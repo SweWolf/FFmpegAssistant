@@ -136,7 +136,9 @@ extension, the right one is added after it, so
 Name</h3>
 <p>This area fills in <strong>Folder</strong> and <strong>File
 Name</strong> for you, with the title, year and episode number in the
-name.</p>
+name. Media servers such as Plex, Jellyfin and Kodi use these names to
+recognise the movie or show and fetch its poster, description and
+episode titles.</p>
 <h4 id="movie">Movie</h4>
 <p>Choose <strong>Movie</strong> to save the file in
 <strong>Videos\Movies</strong> as <code>Title (Year).mp4</code>.</p>
@@ -144,9 +146,12 @@ name.</p>
 <li><strong>Title</strong> is filled in from the file name in the
 command: the text before the first <code>-</code> or <code>[</code>. You
 can change it.</li>
-<li><strong>Year</strong> is optional. You can write it with 2 or 4
-digits: <code>26</code> becomes <code>2026</code> when you leave the
-box, and <code>95</code> becomes <code>1995</code>.</li>
+<li><strong>Year</strong> is optional: the year the movie was released,
+as shown on <a href="https://www.imdb.com">IMDb</a> or <a href="https://www.themoviedb.org">The Movie Database</a>. It helps Plex,
+Jellyfin and Kodi find the right movie when several have the same title.
+You can write it with 2 or 4 digits: <code>26</code> becomes
+<code>2026</code> when you leave the box, and <code>95</code> becomes
+<code>1995</code>.</li>
 </ul>
 <h4 id="tv-show">TV Show</h4>
 <p>Choose <strong>TV Show</strong> to save the file in its own folder
@@ -156,6 +161,11 @@ under <strong>Videos\TV Shows</strong>, for example
 <ul>
 <li><strong>Title</strong> and <strong>Year</strong> work as for movies.
 Together they give the name of the show’s folder.</li>
+<li>For a TV show, <strong>Year</strong> is the year the <strong>show
+first started</strong>, not the year of the episode you are downloading.
+Use the year shown on IMDb or The Movie Database, even for an episode
+from a later season. This way Plex, Jellyfin and Kodi can tell the show
+apart from others with the same name, for example a remake.</li>
 <li>FFmpeg Assistant looks at the episodes that are already in the
 folder and suggests the next one. If <code>s01e05</code> is the last
 one, the new file becomes <code>s01e06</code>.</li>

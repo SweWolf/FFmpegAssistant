@@ -98,7 +98,8 @@ command. If the name has another extension, the right one is added after it, so 
 ### Auto-Suggest Folder and File Name
 
 This area fills in **Folder** and **File Name** for you, with the title, year and episode
-number in the name.
+number in the name. Media servers such as Plex, Jellyfin and Kodi use these names to recognise
+the movie or show and fetch its poster, description and episode titles.
 
 #### Movie
 
@@ -106,8 +107,10 @@ Choose **Movie** to save the file in **Videos\\Movies** as `Title (Year).mp4`.
 
 - **Title** is filled in from the file name in the command: the text before the first `-` or
   `[`. You can change it.
-- **Year** is optional. You can write it with 2 or 4 digits: `26` becomes `2026` when you leave the
-  box, and `95` becomes `1995`.
+- **Year** is optional: the year the movie was released, as shown on
+  [IMDb](https://www.imdb.com) or [The Movie Database](https://www.themoviedb.org). It helps
+  Plex, Jellyfin and Kodi find the right movie when several have the same title. You can write
+  it with 2 or 4 digits: `26` becomes `2026` when you leave the box, and `95` becomes `1995`.
 
 #### TV Show
 
@@ -115,6 +118,10 @@ Choose **TV Show** to save the file in its own folder under **Videos\\TV Shows**
 `Videos\TV Shows\My Show (2024)`. Each episode is named `My Show (2024) - s01e05.mp4`.
 
 - **Title** and **Year** work as for movies. Together they give the name of the show's folder.
+- For a TV show, **Year** is the year the **show first started**, not the year of the episode
+  you are downloading. Use the year shown on IMDb or The Movie Database, even for an episode
+  from a later season. This way Plex, Jellyfin and Kodi can tell the show apart from others with
+  the same name, for example a remake.
 - FFmpeg Assistant looks at the episodes that are already in the folder and suggests the next
   one. If `s01e05` is the last one, the new file becomes `s01e06`.
 - **Season** and **Episode** show the suggested numbers. Change them to download another episode.
