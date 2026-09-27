@@ -54,6 +54,8 @@ namespace FFmpegAssistant
             mnuExtractSubtitleFile = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
             menuAbout = new ToolStripMenuItem();
+            menuViewHelp = new ToolStripMenuItem();
+            menuViewHelpSeparator = new ToolStripSeparator();
             menuNewVersion = new ToolStripMenuItem();
             btnClear = new Button();
             label4 = new Label();
@@ -304,11 +306,24 @@ namespace FFmpegAssistant
             // 
             // menuHelp
             // 
-            menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout });
+            menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuViewHelp, menuViewHelpSeparator, menuAbout });
             menuHelp.Name = "menuHelp";
             menuHelp.Size = new Size(44, 20);
             menuHelp.Text = "Help";
-            // 
+            //
+            // menuViewHelp
+            //
+            menuViewHelp.Name = "menuViewHelp";
+            menuViewHelp.ShortcutKeys = Keys.F1;
+            menuViewHelp.Size = new Size(210, 22);
+            menuViewHelp.Text = "FFmpeg Assistant Help";
+            menuViewHelp.Click += menuViewHelp_Click;
+            //
+            // menuViewHelpSeparator
+            //
+            menuViewHelpSeparator.Name = "menuViewHelpSeparator";
+            menuViewHelpSeparator.Size = new Size(207, 6);
+            //
             // menuAbout
             // 
             menuAbout.Name = "menuAbout";
@@ -600,6 +615,8 @@ namespace FFmpegAssistant
         private ToolStripMenuItem menuCreateShortcut;
         private ToolStripMenuItem menuHelp;
         private ToolStripMenuItem menuAbout;
+        private ToolStripMenuItem menuViewHelp;
+        private ToolStripSeparator menuViewHelpSeparator;
         private ToolStripMenuItem menuNewVersion;
         private ToolStripMenuItem menuSettings;
         private ToolStripMenuItem mnuValidateVideoFile;

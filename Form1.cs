@@ -1445,6 +1445,8 @@ namespace FFmpegAssistant
             Process.Start("explorer.exe", $"\"{folder}\"");
         }
 
+        private void menuViewHelp_Click(object? sender, EventArgs e) => HelpFiles.OpenHelp(AppTitle);
+
         private void menuAbout_Click(object sender, EventArgs e)
         {
             using var about = new AboutForm();

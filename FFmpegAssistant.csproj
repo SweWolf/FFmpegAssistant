@@ -26,6 +26,10 @@
     <EmbeddedResource Include="Resources\*.wav">
       <LogicalName>Sounds/%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <!-- Help > FFmpeg Assistant Help (F1). Rebuild it from help.md with docs\build-help.cmd -->
+    <Content Include="docs\help.html" Link="Help\help.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
