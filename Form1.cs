@@ -1043,7 +1043,7 @@ namespace FFmpegAssistant
                             WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");
 
                             string convArgs = $"-y -i \"{downloadPath}\" -c copy \"{outputPath}\"";
-                            var (convCode, _) = await RunFfmpegAsync(convArgs, logFile, _cts.Token);
+                            var (convCode, _) = await RunFfmpegAsync(convArgs, logFile, _cts.Token, appendToLog: true);
 
                             if (convCode == 0)
                             {
@@ -1107,7 +1107,8 @@ namespace FFmpegAssistant
 
                         // In normal mode validate the part file; in watch mode validate the final file
                         string validatePath = watchMode ? outputPath : partPath;
-                        bool valid = await ValidateVideoFileAsync(validatePath, logFile, _cts.Token);
+                        // No log: the download's log is what matters, and it must not be replaced
+                        bool valid = await ValidateVideoFileAsync(validatePath, logFile: null, _cts.Token);
                         if (valid)
                         {
                             // In normal mode: rename the (part) file to the final name now that it's verified
@@ -1899,8 +1900,12 @@ namespace FFmpegAssistant
                 .EndsWith("-i", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Runs FFmpeg with <paramref name="arguments"/>, writing its output to <paramref name="logFile"/>
+        /// (replaced, or added to when <paramref name="appendToLog"/> is true). No log when it is null.
+        /// </summary>
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
-            string arguments, string logFile, CancellationToken cancellationToken = default)
+            string arguments, string? logFile, CancellationToken cancellationToken = default, bool appendToLog = false)
         {
             var psi = new ProcessStartInfo(AppSettings.GetFfmpegExe(), arguments)
             {
@@ -1912,7 +1917,8 @@ namespace FFmpegAssistant
             };
 
             using var process = new Process { StartInfo = psi };
-            await using var writer = new StreamWriter(logFile, append: false, System.Text.Encoding.UTF8) { AutoFlush = true };
+            await using var writer = logFile == null ? null
+                : new StreamWriter(logFile, appendToLog, System.Text.Encoding.UTF8) { AutoFlush = true };
             var writerLock = new object();
             var errorLines = new List<string>();
 
@@ -1921,7 +1927,7 @@ namespace FFmpegAssistant
                 if (line == null) return;
                 lock (writerLock)
                 {
-                    writer.WriteLine(line);
+                    writer?.WriteLine(line);
                     if (IsErrorLine(line))
                         errorLines.Add(line.Trim());
                 }
@@ -1966,7 +1972,7 @@ namespace FFmpegAssistant
         /// If FFmpeg can't be run, <paramref name="okIfFfmpegMissing"/> decides: true after a download
         /// (don't report a good download as broken), false for Tools > Validate Video File (rethrows).
         /// </summary>
-        private async Task<bool> ValidateVideoFileAsync(string filePath, string logFile, CancellationToken cancellationToken,
+        private async Task<bool> ValidateVideoFileAsync(string filePath, string? logFile, CancellationToken cancellationToken,
                                                         bool okIfFfmpegMissing = true)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
