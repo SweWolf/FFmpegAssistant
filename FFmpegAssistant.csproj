@@ -26,10 +26,11 @@
     <EmbeddedResource Include="Resources\*.wav">
       <LogicalName>Sounds/%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
-    <!-- Help > FFmpeg Assistant Help (F1). Rebuild it from help.md with docs\build-help.cmd -->
-    <Content Include="docs\help.html" Link="Help\help.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Help > FFmpeg Assistant Help (F1), embedded for the same reason; HelpFiles.cs saves it to
+         %AppData% to open it. Rebuild it from help.md with docs\build-help.cmd -->
+    <EmbeddedResource Include="docs\help.html">
+      <LogicalName>Help/help.html</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
