@@ -405,7 +405,7 @@ namespace FFmpegAssistant
             txtYear.Name = "txtYear";
             txtYear.Size = new Size(62, 23);
             txtYear.TabIndex = 3;
-            toolTip1.SetToolTip(txtYear, "Optional — 2 or 4 digits, e.g. 26 or 2026");
+            toolTip1.SetToolTip(txtYear, "Optional: the year the movie was released, or the year the TV show first started (as on IMDb).\n2 or 4 digits, e.g. 26 or 2026.");
             txtYear.TextChanged += txtYear_TextChanged;
             txtYear.Leave += txtYear_Leave;
             // 
