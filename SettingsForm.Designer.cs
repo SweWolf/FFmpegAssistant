@@ -38,10 +38,14 @@ namespace FFmpegAssistant
             label5 = new Label();
             txtCustomActionSoundFile = new TextBox();
             btnBrowseForCustomSoundFile = new Button();
+            grpExtraFolders = new GroupBox();
+            txtExtraFolders = new TextBox();
+            lblExtraFoldersHint = new Label();
             grpFfmpeg.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
             groupBox1.SuspendLayout();
+            grpExtraFolders.SuspendLayout();
             SuspendLayout();
             // 
             // grpFfmpeg
@@ -98,10 +102,10 @@ namespace FFmpegAssistant
             // btnOK
             // 
             btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnOK.Location = new Point(326, 651);
+            btnOK.Location = new Point(326, 778);
             btnOK.Name = "btnOK";
             btnOK.Size = new Size(75, 27);
-            btnOK.TabIndex = 7;
+            btnOK.TabIndex = 8;
             btnOK.Text = "OK";
             btnOK.UseVisualStyleBackColor = true;
             btnOK.Click += btnOK_Click;
@@ -110,10 +114,10 @@ namespace FFmpegAssistant
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(407, 651);
+            btnCancel.Location = new Point(407, 778);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(75, 27);
-            btnCancel.TabIndex = 8;
+            btnCancel.TabIndex = 9;
             btnCancel.Text = "Cancel";
             btnCancel.UseVisualStyleBackColor = true;
             btnCancel.Click += btnCancel_Click;
@@ -281,14 +285,47 @@ namespace FFmpegAssistant
             btnBrowseForCustomSoundFile.UseVisualStyleBackColor = true;
             btnBrowseForCustomSoundFile.Visible = false;
             // 
+            // grpExtraFolders
+            // 
+            grpExtraFolders.Controls.Add(txtExtraFolders);
+            grpExtraFolders.Controls.Add(lblExtraFoldersHint);
+            grpExtraFolders.Location = new Point(12, 622);
+            grpExtraFolders.Name = "grpExtraFolders";
+            grpExtraFolders.Size = new Size(470, 145);
+            grpExtraFolders.TabIndex = 7;
+            grpExtraFolders.TabStop = false;
+            grpExtraFolders.Text = "Extra Folders in the Folder List";
+            // 
+            // txtExtraFolders
+            // 
+            txtExtraFolders.AcceptsReturn = true;
+            txtExtraFolders.Location = new Point(10, 22);
+            txtExtraFolders.Multiline = true;
+            txtExtraFolders.Name = "txtExtraFolders";
+            txtExtraFolders.ScrollBars = ScrollBars.Both;
+            txtExtraFolders.Size = new Size(450, 90);
+            txtExtraFolders.TabIndex = 0;
+            txtExtraFolders.WordWrap = false;
+            // 
+            // lblExtraFoldersHint
+            // 
+            lblExtraFoldersHint.AutoSize = true;
+            lblExtraFoldersHint.ForeColor = SystemColors.GrayText;
+            lblExtraFoldersHint.Location = new Point(10, 118);
+            lblExtraFoldersHint.Name = "lblExtraFoldersHint";
+            lblExtraFoldersHint.Size = new Size(340, 15);
+            lblExtraFoldersHint.TabIndex = 1;
+            lblExtraFoldersHint.Text = "One folder per line, shown in this order after the TV Shows folder";
+            // 
             // SettingsForm
             // 
             AcceptButton = btnOK;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(494, 690);
+            ClientSize = new Size(494, 817);
             ControlBox = false;
+            Controls.Add(grpExtraFolders);
             Controls.Add(groupBox1);
             Controls.Add(groupBox3);
             Controls.Add(groupBox2);
@@ -310,6 +347,8 @@ namespace FFmpegAssistant
             groupBox3.PerformLayout();
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
+            grpExtraFolders.ResumeLayout(false);
+            grpExtraFolders.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -338,5 +377,8 @@ namespace FFmpegAssistant
         private Button btnBrowseForCustomSoundFile;
         private TextBox txtCustomActionSoundFile;
         private Label label5;
+        private GroupBox grpExtraFolders;
+        private TextBox txtExtraFolders;
+        private Label lblExtraFoldersHint;
     }
 }

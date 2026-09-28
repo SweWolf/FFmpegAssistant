@@ -283,5 +283,45 @@ namespace FFmpegAssistant
             }
         }
 
+        // -------------------------------------------------------------------------
+        // Extra folders in the main window's Folder list, one per line (default: none)
+        // -------------------------------------------------------------------------
+
+        private static readonly string ExtraFoldersFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "extra-folders.txt");
+
+        private static List<string>? _cachedExtraFolders;
+
+        public static IReadOnlyList<string> ExtraFolders
+        {
+            get
+            {
+                if (_cachedExtraFolders != null) return _cachedExtraFolders;
+                try
+                {
+                    if (File.Exists(ExtraFoldersFile))
+                    {
+                        _cachedExtraFolders = File.ReadAllLines(ExtraFoldersFile, System.Text.Encoding.UTF8)
+                            .Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
+                        return _cachedExtraFolders;
+                    }
+                }
+                catch { }
+                _cachedExtraFolders = new List<string>();
+                return _cachedExtraFolders;
+            }
+            set
+            {
+                _cachedExtraFolders = value.ToList();
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ExtraFoldersFile)!);
+                    File.WriteAllLines(ExtraFoldersFile, _cachedExtraFolders, System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
     }
 }

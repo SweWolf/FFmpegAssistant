@@ -118,7 +118,9 @@ and <strong>File Name</strong> you choose.</p>
 <h3 id="folder-and-file-name">Folder and File Name</h3>
 <p><strong>Folder</strong> is where the file is saved. The list contains
 your <strong>Videos</strong> folder and its <strong>Movies</strong> and
-<strong>TV Shows</strong> subfolders. Choose one of them, type or paste
+<strong>TV Shows</strong> subfolders, followed by any folders you have
+added under <a href="#extra-folders-in-the-folder-list">Extra Folders in
+the Folder List</a> in the settings. Choose one of them, type or paste
 another folder, or click <strong>…</strong> to browse for one.</p>
 <p>If the folder does not exist, it is created when you click
 <strong>Download</strong>. Folders that FFmpeg Assistant suggested
@@ -392,12 +394,6 @@ Failure</h3>
 download is tried before FFmpeg Assistant gives up. A download is tried
 again when FFmpeg fails, or when the downloaded file is damaged. The
 default is 5. Leave it empty, or enter 0 or 1, to not try again.</p>
-<h3 id="check-for-new-version">Check for New Version</h3>
-<p><strong>Check for New Version at Startup</strong>: when
-<strong>Yes</strong>, FFmpeg Assistant checks on GitHub whether a new
-version is available each time it starts. If there is one, <strong>New
-Version Available</strong> appears at the right end of the menu bar.
-Click it to open the download page.</p>
 <h3 id="action-when-download-finished">Action When Download
 Finished</h3>
 <p><strong>Action</strong> decides what happens when a download is
@@ -412,6 +408,24 @@ File</strong>.</li>
 complete.”</li>
 <li><strong>None</strong>: does nothing. Status still shows “Done”.</li>
 </ul>
+<h3 id="check-for-new-version">Check for New Version</h3>
+<p><strong>Check for New Version at Startup</strong>: when
+<strong>Yes</strong>, FFmpeg Assistant checks on GitHub whether a new
+version is available each time it starts. If there is one, <strong>New
+Version Available</strong> appears at the right end of the menu bar.
+Click it to open the download page.</p>
+<h3 id="extra-folders-in-the-folder-list">Extra Folders in the Folder
+List</h3>
+<p>Add the folders you often save to, for example
+<code>D:\Videos\Music Videos</code> or a folder on a network drive. Type
+one folder per line, and press <strong>Enter</strong> to start a new
+line. When you click <strong>OK</strong>, they are added to the
+<strong>Folder</strong> list in the main window, in the same order,
+after the <strong>TV Shows</strong> folder.</p>
+<p>Each line must be a full path that starts with a drive letter or
+<code>\\server</code>. Empty lines are ignored. If a folder in the list
+does not exist when you download to it, you are asked whether to create
+it.</p>
 <h2 id="create-shortcut">Create Shortcut</h2>
 <p><strong>Tools &gt; Create Shortcut…</strong> creates shortcuts to
 FFmpeg Assistant. Check where you want them:</p>

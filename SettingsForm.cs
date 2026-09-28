@@ -14,6 +14,7 @@ namespace FFmpegAssistant
             txtFfmpegPath.Text = AppSettings.FfmpegExePath ?? string.Empty;
             txtNumberOfDownloadAttempts.Text = AppSettings.NumberOfDownloadAttempts.ToString();
             cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
+            txtExtraFolders.Lines = AppSettings.ExtraFolders.ToArray();
 
             cboFinishedDownlaodSound.Items.AddRange(SoundLibrary.GetAvailableSounds().ToArray());
             cboFinishedDownlaodSound.Items.Add(CustomSoundSentinel);
@@ -148,6 +149,9 @@ namespace FFmpegAssistant
                 }
             }
 
+            if (!TryGetExtraFolders(out List<string> extraFolders))
+                return;
+
             string path = txtFfmpegPath.Text.Trim();
             if (string.IsNullOrEmpty(path))
                 AppSettings.ClearFfmpegExe();
@@ -161,9 +165,44 @@ namespace FFmpegAssistant
 
             AppSettings.ActionWhenDownloadFinished = cboActionWhenDownloadFinished.SelectedItem?.ToString() ?? "Play a Sound";
             AppSettings.FinishedDownloadSoundFile = GetSelectedSoundIdentifier();
+            AppSettings.ExtraFolders = extraFolders;
 
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        /// <summary>
+        /// Reads "Extra Folders in the Folder List": one folder per line, blank lines and duplicates
+        /// ignored. Each one must be a full path without illegal characters; otherwise shows why,
+        /// selects that line and returns false.
+        /// </summary>
+        private bool TryGetExtraFolders(out List<string> folders)
+        {
+            folders = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string[] lines = txtExtraFolders.Lines;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string folder = lines[i].Trim();
+                if (folder.Length == 0) continue;
+
+                string? error = !Path.IsPathFullyQualified(folder)
+                    ? $"\"{folder}\" is not a full folder path, for example D:\\Videos\\Music Videos."
+                    : Form1.GetInvalidPathCharError(folder);
+                if (error != null)
+                {
+                    MessageBox.Show(error, Form1.AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    txtExtraFolders.Focus();
+                    int start = txtExtraFolders.GetFirstCharIndexFromLine(i);
+                    txtExtraFolders.Select(start, lines[i].Length);
+                    txtExtraFolders.ScrollToCaret();
+                    return false;
+                }
+
+                if (seen.Add(Path.TrimEndingDirectorySeparator(folder)))
+                    folders.Add(folder);
+            }
+            return true;
         }
 
         private void btnCancel_Click(object sender, EventArgs e)

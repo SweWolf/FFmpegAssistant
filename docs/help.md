@@ -82,8 +82,9 @@ replaces it with the **Folder** and **File Name** you choose.
 ### Folder and File Name
 
 **Folder** is where the file is saved. The list contains your **Videos** folder and its
-**Movies** and **TV Shows** subfolders. Choose one of them, type or paste another folder, or click
-**...** to browse for one.
+**Movies** and **TV Shows** subfolders, followed by any folders you have added under
+[Extra Folders in the Folder List](#extra-folders-in-the-folder-list) in the settings. Choose one
+of them, type or paste another folder, or click **...** to browse for one.
 
 If the folder does not exist, it is created when you click **Download**. Folders that
 FFmpeg Assistant suggested itself are created without asking. For a folder you typed, you are
@@ -299,12 +300,6 @@ Leave it empty to use the FFmpeg on the system PATH.
 up. A download is tried again when FFmpeg fails, or when the downloaded file is damaged. The
 default is 5. Leave it empty, or enter 0 or 1, to not try again.
 
-### Check for New Version
-
-**Check for New Version at Startup**: when **Yes**, FFmpeg Assistant checks on GitHub whether a
-new version is available each time it starts. If there is one, **New Version Available** appears
-at the right end of the menu bar. Click it to open the download page.
-
 ### Action When Download Finished
 
 **Action** decides what happens when a download is finished:
@@ -314,6 +309,23 @@ at the right end of the menu bar. Click it to open the download page.
   **Custom Sound File**.
 - **Message Box**: shows the message "The download is complete."
 - **None**: does nothing. Status still shows "Done".
+
+### Check for New Version
+
+**Check for New Version at Startup**: when **Yes**, FFmpeg Assistant checks on GitHub whether a
+new version is available each time it starts. If there is one, **New Version Available** appears
+at the right end of the menu bar. Click it to open the download page.
+
+### Extra Folders in the Folder List
+
+Add the folders you often save to, for example `D:\Videos\Music Videos` or a folder on a network
+drive. Type one folder per line, and press **Enter** to start a new line. When you click **OK**,
+they are added to the **Folder** list in the main window, in the same order, after the
+**TV Shows** folder.
+
+Each line must be a full path that starts with a drive letter or `\\server`. Empty lines are
+ignored. If a folder in the list does not exist when you download to it, you are asked whether
+to create it.
 
 ## Create Shortcut
 

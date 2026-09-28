@@ -33,6 +33,8 @@ namespace FFmpegAssistant
 
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _extraFolders = new(); // from Settings, see RefreshExtraFolders
+        private bool _refreshingFolders; // RefreshExtraFolders is changing the Folder list: no episode suggestion
 
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
@@ -140,9 +142,13 @@ namespace FFmpegAssistant
             AddSuggestedFolder(videos);
             AddSuggestedFolder(Path.Combine(videos, "Movies"));
             AddSuggestedFolder(Path.Combine(videos, "TV Shows"));
+            RefreshExtraFolders();
             cboFolder.SelectedIndex = 0;
 
-            cboFolder.SelectedIndexChanged += (s, _) => SuggestNextEpisode(cboFolder.Text);
+            cboFolder.SelectedIndexChanged += (s, _) =>
+            {
+                if (!_refreshingFolders) SuggestNextEpisode(cboFolder.Text);
+            };
             cboFolder.Enter += (s, _) => _folderTextOnFocus = cboFolder.Text;
             cboFolder.Leave += (s, _) =>
             {
@@ -1337,6 +1343,51 @@ namespace FFmpegAssistant
         }
 
         /// <summary>
+        /// Puts the "Extra Folders in the Folder List" from Settings right after the three built-in
+        /// folders (Videos, Movies, TV Shows), in the order they were entered. Folders added with
+        /// Browse stay after them. Keeps what the Folder box shows. Called at startup and after
+        /// Settings is closed with OK. They are not "suggested" folders: a missing one is only
+        /// created after asking, as for a typed folder (it may be a typo or an unplugged drive).
+        /// </summary>
+        private void RefreshExtraFolders()
+        {
+            const int builtInFolderCount = 3;
+            static bool SameFolder(string a, string b) => string.Equals(
+                Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
+
+            string shownFolder = cboFolder.Text;
+            _refreshingFolders = true;
+            try
+            {
+                foreach (string folder in _extraFolders)
+                    cboFolder.Items.Remove(folder);
+                _extraFolders.Clear();
+
+                int insertAt = builtInFolderCount;
+                foreach (string folder in AppSettings.ExtraFolders)
+                {
+                    var items = cboFolder.Items.Cast<string>().ToList();
+                    if (items.Take(insertAt).Any(item => SameFolder(item, folder)))
+                        continue; // a built-in folder, or entered twice
+                    // Added with Browse earlier: move it up to its place in the list
+                    string? browsed = items.Skip(insertAt).FirstOrDefault(item => SameFolder(item, folder));
+                    if (browsed != null)
+                        cboFolder.Items.Remove(browsed);
+
+                    cboFolder.Items.Insert(insertAt++, folder);
+                    _extraFolders.Add(folder);
+                }
+
+                if (cboFolder.Text != shownFolder)
+                    cboFolder.Text = shownFolder;
+            }
+            finally
+            {
+                _refreshingFolders = false;
+            }
+        }
+
+        /// <summary>
         /// Creates <paramref name="folder"/> (including any missing parent folders) if it doesn't exist yet,
         /// asking first when <paramref name="askFirst"/> is true. Returns false if the user declines
         /// or the folder could not be created.
@@ -1496,7 +1547,8 @@ namespace FFmpegAssistant
         private void menuSettings_Click_1(object sender, EventArgs e)
         {
             using var form = new SettingsForm();
-            form.ShowDialog(this);
+            if (form.ShowDialog(this) == DialogResult.OK)
+                RefreshExtraFolders();
         }
 
         /// <summary>FFmpeg arguments that validate a file: decode everything, write nothing.</summary>
@@ -2044,7 +2096,7 @@ namespace FFmpegAssistant
         /// characters), otherwise null. FFmpeg only reports a cryptic exit code (-22) for those.
         /// (Same routine in all the SweWolf FFmpeg apps.)
         /// </summary>
-        private static string? GetInvalidPathCharError(string path)
+        internal static string? GetInvalidPathCharError(string path)
         {
             char[] invalid = Path.GetInvalidFileNameChars();
             string root = Path.GetPathRoot(path) ?? "";
