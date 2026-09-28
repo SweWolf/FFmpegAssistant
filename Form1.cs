@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -1126,7 +1126,17 @@ namespace FFmpegAssistant
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
-                            SetStatus("Done", StatusLevel.Success);
+
+                            // Read the checkbox now, not at the start: it can be changed during the download
+                            string doneStatus = "Done";
+                            if (chkSaveSubtitlesAsSeparateFiles.Checked)
+                            {
+                                string? subtitleResult = await SaveSubtitlesAsSeparateFilesAsync(outputPath, logFile, _cts.Token);
+                                if (subtitleResult == null) continue; // failed or cancelled: already reported
+                                doneStatus = subtitleResult;
+                            }
+
+                            SetStatus(doneStatus, StatusLevel.Success);
                             NotifyDownloadFinished(watchMode);
                         }
                         else
@@ -1648,24 +1658,10 @@ namespace FFmpegAssistant
             string videoPath = ofd.FileName;
 
             // Probe the file for subtitle streams using ffprobe
-            string ffprobePath = GetFfprobeExe();
-            string probeArgs = $"-v quiet -print_format json -show_streams \"{videoPath}\"";
-
-            var psi = new ProcessStartInfo(ffprobePath, probeArgs)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
             List<SubtitleStream> streams;
             try
             {
-                using var proc = Process.Start(psi)!;
-                string json = await proc.StandardOutput.ReadToEndAsync();
-                await proc.WaitForExitAsync();
-                streams = ParseSubtitleStreams(json);
+                streams = await ProbeSubtitleStreamsAsync(videoPath);
             }
             catch (Exception ex)
             {
@@ -1696,6 +1692,35 @@ namespace FFmpegAssistant
             _settingExtractCommand = false;
             _commandSetByExtractFeature = true;
             txtFileName.Text = suggestedName;
+        }
+
+        /// <summary>
+        /// Lists the subtitle streams in <paramref name="videoPath"/> with ffprobe.
+        /// Throws if ffprobe can't be run; cancelling kills it and throws <see cref="OperationCanceledException"/>.
+        /// </summary>
+        private static async Task<List<SubtitleStream>> ProbeSubtitleStreamsAsync(
+            string videoPath, CancellationToken cancellationToken = default)
+        {
+            var psi = new ProcessStartInfo(GetFfprobeExe(), $"-v quiet -print_format json -show_streams \"{videoPath}\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = Process.Start(psi)!;
+            try
+            {
+                string json = await proc.StandardOutput.ReadToEndAsync(cancellationToken);
+                await proc.WaitForExitAsync(cancellationToken);
+                return ParseSubtitleStreams(json);
+            }
+            catch (OperationCanceledException)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                throw;
+            }
         }
 
         private static string GetFfprobeExe()
@@ -1729,9 +1754,174 @@ namespace FFmpegAssistant
                     if (tags.TryGetProperty("language", out var langEl)) lang = langEl.GetString() ?? "";
                     if (tags.TryGetProperty("title", out var titleEl)) title = titleEl.GetString() ?? "";
                 }
-                result.Add(new SubtitleStream(index, codec, lang, title));
+                bool forced = false, hearingImpaired = false;
+                if (el.TryGetProperty("disposition", out var disp))
+                {
+                    forced = disp.TryGetProperty("forced", out var fEl) && fEl.TryGetInt32(out int f) && f == 1;
+                    hearingImpaired = disp.TryGetProperty("hearing_impaired", out var hEl) && hEl.TryGetInt32(out int h) && h == 1;
+                }
+                result.Add(new SubtitleStream(index, codec, lang, title, forced, hearingImpaired));
             }
             return result;
+        }
+
+        /// <summary>
+        /// "Save Subtitles as Separate Files", after a finished (and validated) download: saves each text
+        /// subtitle stream in <paramref name="videoPath"/> as an .srt file in the same folder (see
+        /// <see cref="BuildSubtitleFileNames"/>). Asks before overwriting an existing file (No skips it).
+        /// Image subtitles (e.g. PGS from a Blu-ray) can't be converted to SRT and are skipped.
+        /// Returns the status text to show instead of "Done", or null if it failed or was cancelled:
+        /// then the status is already set and any error shown (the downloaded video is fine either way).
+        /// </summary>
+        private async Task<string?> SaveSubtitlesAsSeparateFilesAsync(string videoPath, string logFile,
+                                                                      CancellationToken cancellationToken)
+        {
+            SetStatus("Download finished, extracting subtitles...", StatusLevel.InProgress);
+            TaskbarProgress.SetIndeterminate(this);
+            var unfinishedFiles = new List<string>(); // deleted if FFmpeg fails or is cancelled
+
+            void DeleteUnfinishedFiles()
+            {
+                foreach (string path in unfinishedFiles)
+                    try { if (File.Exists(path)) File.Delete(path); } catch { }
+            }
+
+            string? Fail(string message)
+            {
+                DeleteUnfinishedFiles();
+                SetStatus("Download finished, but the subtitles could not be saved.", StatusLevel.Warning);
+                LogError(Path.GetFileName(videoPath), message, logFile);
+                TaskbarFlash.FlashIfInactive(this);
+                MessageBox.Show($"The download is complete, but the subtitles could not be saved:\n\n{message}",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+
+            try
+            {
+                List<SubtitleStream> streams;
+                try
+                {
+                    streams = await ProbeSubtitleStreamsAsync(videoPath, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    WriteAppLog($"SUBTITLE : FAILED — could not probe the file: {ex.Message}");
+                    return Fail($"{ex.Message}\n\nMake sure ffprobe.exe is installed alongside ffmpeg.exe.");
+                }
+
+                if (streams.Count == 0)
+                {
+                    WriteAppLog("SUBTITLE : The file has no subtitles");
+                    return "Done — the file has no subtitles";
+                }
+
+                foreach (var s in streams.Where(s => !s.IsText))
+                    WriteAppLog($"SUBTITLE : Stream #{s.StreamIndex} skipped — image subtitles ({s.Codec}) can't be saved as SRT");
+                var textStreams = streams.Where(s => s.IsText).ToList();
+                if (textStreams.Count == 0)
+                    return "Done — the subtitles are images and can't be saved as SRT";
+
+                // One FFmpeg run with one output per stream; -y because the user has already been asked
+                string folder = Path.GetDirectoryName(videoPath)!;
+                List<string> names = BuildSubtitleFileNames(Path.GetFileNameWithoutExtension(videoPath), textStreams);
+                var arguments = new System.Text.StringBuilder($"-y -i \"{videoPath}\"");
+                var targets = new List<string>();
+                int skipped = 0;
+                for (int i = 0; i < textStreams.Count; i++)
+                {
+                    string path = Path.Combine(folder, names[i]);
+                    if (File.Exists(path))
+                    {
+                        TaskbarFlash.FlashIfInactive(this);
+                        var answer = MessageBox.Show(
+                            $"The file \"{path}\" already exists.\n\nDo you want to overwrite it?",
+                            AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                        if (answer != DialogResult.Yes)
+                        {
+                            WriteAppLog($"SUBTITLE : Skipped, the file already exists: {path}");
+                            skipped++;
+                            continue;
+                        }
+                    }
+                    arguments.Append($" -map 0:{textStreams[i].StreamIndex} -c:s srt \"{path}\"");
+                    targets.Add(path);
+                }
+
+                if (targets.Count == 0)
+                    return "Done — subtitles not saved (the files already exist)";
+
+                WriteAppLog($"SUBTITLE : ffmpeg {arguments}");
+                unfinishedFiles.AddRange(targets);
+                var (exitCode, errorLines) = await RunFfmpegAsync(arguments.ToString(), logFile, cancellationToken,
+                                                                  appendToLog: true, showProgress: false);
+                if (exitCode != 0)
+                {
+                    string details = errorLines.Count > 0
+                        ? string.Join("\n", errorLines.TakeLast(6))
+                        : "No specific error details captured. See the log file.";
+                    WriteAppLog($"SUBTITLE : FAILED (exit code {exitCode}) — {details.ReplaceLineEndings(" | ")}");
+                    return Fail($"FFmpeg exited with an error (code {exitCode}):\n\n{details}");
+                }
+                unfinishedFiles.Clear();
+
+                foreach (string path in targets)
+                    WriteAppLog($"SUBTITLE : Saved {path}");
+                string saved = targets.Count == 1
+                    ? $"Done — subtitles saved as {Path.GetFileName(targets[0])}"
+                    : $"Done — {targets.Count} subtitle files saved";
+                return skipped == 0 ? saved : $"{saved}, {skipped} skipped";
+            }
+            catch (OperationCanceledException)
+            {
+                DeleteUnfinishedFiles();
+                WriteAppLog("SUBTITLE : CANCELLED by user");
+                SetStatus("Download finished, but the subtitle extraction was cancelled.", StatusLevel.Warning);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                WriteAppLog($"SUBTITLE : EXCEPTION — {ex.Message}");
+                return Fail(ex.Message);
+            }
+            finally
+            {
+                TaskbarProgress.Clear(this);
+            }
+        }
+
+        /// <summary>
+        /// .srt file names for <see cref="SaveSubtitlesAsSeparateFilesAsync"/>, in the order of
+        /// <paramref name="streams"/>. One stream: "Movie.srt". Several: the language and the forced/SDH
+        /// flags, as Plex, Kodi and VLC expect ("Movie.eng.srt", "Movie.eng.forced.srt", "Movie.swe.sdh.srt");
+        /// a stream without a language gets its number ("Movie.3.srt"), and a name that is still taken
+        /// gets ".2", ".3" and so on ("Movie.eng.2.srt").
+        /// </summary>
+        private static List<string> BuildSubtitleFileNames(string baseName, List<SubtitleStream> streams)
+        {
+            if (streams.Count == 1)
+                return new List<string> { baseName + ".srt" };
+
+            var names = new List<string>();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < streams.Count; i++)
+            {
+                var parts = new List<string> { baseName };
+                // Only letters and digits: the language tag comes from the file and ends up in a file name
+                string language = new string(streams[i].Language.Where(char.IsAsciiLetterOrDigit).ToArray()).ToLowerInvariant();
+                if (language.Length > 0 && language != "und")
+                    parts.Add(language);
+                if (streams[i].Forced) parts.Add("forced");
+                if (streams[i].HearingImpaired) parts.Add("sdh");
+                if (parts.Count == 1) parts.Add((i + 1).ToString());
+
+                string name = string.Join(".", parts);
+                string unique = name;
+                for (int n = 2; !used.Add(unique); n++)
+                    unique = $"{name}.{n}";
+                names.Add(unique + ".srt");
+            }
+            return names;
         }
 
         private void btnOpenLogFile_Click_1(object sender, EventArgs e)
@@ -1903,9 +2093,12 @@ namespace FFmpegAssistant
         /// <summary>
         /// Runs FFmpeg with <paramref name="arguments"/>, writing its output to <paramref name="logFile"/>
         /// (replaced, or added to when <paramref name="appendToLog"/> is true). No log when it is null.
+        /// <paramref name="showProgress"/> false leaves the progress bar, grid and status alone
+        /// (e.g. while extracting subtitles after a finished download).
         /// </summary>
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
-            string arguments, string? logFile, CancellationToken cancellationToken = default, bool appendToLog = false)
+            string arguments, string? logFile, CancellationToken cancellationToken = default, bool appendToLog = false,
+            bool showProgress = true)
         {
             var psi = new ProcessStartInfo(AppSettings.GetFfmpegExe(), arguments)
             {
@@ -1931,7 +2124,7 @@ namespace FFmpegAssistant
                     if (IsErrorLine(line))
                         errorLines.Add(line.Trim());
                 }
-                ProcessOutputLine(line);
+                if (showProgress) ProcessOutputLine(line);
             }
 
             process.OutputDataReceived += (_, e) => HandleLine(e.Data);

@@ -14,6 +14,7 @@ checks the downloaded file and tries again if the download fails.
   - [Folder and File Name](#folder-and-file-name)
   - [Auto-Suggest Folder and File Name](#auto-suggest-folder-and-file-name)
   - [Enable Watching While Downloading](#enable-watching-while-downloading)
+  - [Save Subtitles as Separate Files](#save-subtitles-as-separate-files)
   - [Downloading](#downloading)
   - [Progress and Status](#progress-and-status)
 - [What Happens During a Download](#what-happens-during-a-download)
@@ -33,8 +34,9 @@ checks the downloaded file and tries again if the download fails.
 - **FFmpeg**, the free program that does the actual download. Download it from
   [ffmpeg.org](https://ffmpeg.org/download.html) and install it so that it is on the system PATH,
   or tell FFmpeg Assistant where `ffmpeg.exe` is under **Tools > Settings**.
-  [Extract Subtitle File](#extract-subtitle-file) also needs `ffprobe.exe`, which comes with
-  FFmpeg. Keep it in the same folder as `ffmpeg.exe`.
+  [Extract Subtitle File](#extract-subtitle-file) and
+  [Save Subtitles as Separate Files](#save-subtitles-as-separate-files) also need `ffprobe.exe`,
+  which comes with FFmpeg. Keep it in the same folder as `ffmpeg.exe`.
 - The web browser extension
   [Privatkopiera](https://stefansundin.github.io/privatkopiera), which creates the FFmpeg
   commands.
@@ -151,6 +153,31 @@ the box before the download is finished, you get the usual notification. Errors 
 
 This option is not used for subtitle files.
 
+### Save Subtitles as Separate Files
+
+Check **Save Subtitles as Separate Files** to save the subtitles that are stored inside the
+downloaded video as `.srt` files in the same folder. Some players and TVs only show subtitles from
+a separate file.
+
+The box is read when the download is finished and the file has been checked, not when you click
+**Download**. So you can still check or uncheck it during the download. Status then shows
+"Download finished, extracting subtitles...". Only after that is the download done, and you get
+the usual notification.
+
+The subtitle file gets the same name as the video, for example `My Movie.srt`. If the video has
+several subtitle tracks, each file also gets the language of the track, and `forced` or `sdh`
+(subtitles for the deaf and hard of hearing) if the track is marked that way:
+`My Movie.eng.srt`, `My Movie.swe.srt`, `My Movie.eng.forced.srt`. A track without a language gets
+its number instead, for example `My Movie.3.srt`. Most players, such as VLC, Plex and Kodi,
+understand these names.
+
+If a subtitle file already exists, you are asked whether to overwrite it. Click **No** to keep the
+existing file.
+
+Subtitles that are stored as pictures (for example on Blu-ray and DVD) can't be saved as `.srt`
+and are skipped. If the video has no subtitles, Status says so. If saving the subtitles fails,
+FFmpeg Assistant shows what went wrong. The downloaded video is not affected.
+
 ### Downloading
 
 - **Download** starts the download.
@@ -208,6 +235,8 @@ FFmpeg Assistant does more than run the command:
    is not damaged. This is the "Validating downloaded file..." step. It is usually much faster
    than the download.
 3. **Rename it.** Only when the file is OK is `(part)` removed from the name.
+4. **Save the subtitles**, if **Save Subtitles as Separate Files** is checked (see
+   [Save Subtitles as Separate Files](#save-subtitles-as-separate-files)).
 
 If the download or the check fails, it is tried again automatically (see
 [Auto-Retry on Download Failure](#auto-retry-on-download-failure)). If the last try also fails,
@@ -354,8 +383,9 @@ Remove it and try again.
 After [Validate Video File](#validate-video-file), the **Command** box shows the command of the
 check. Paste a download command to start a download.
 
-**"Could not probe the file"**
-[Extract Subtitle File](#extract-subtitle-file) needs `ffprobe.exe`. Make sure it is in the same
+**"Could not probe the file"** or **"the subtitles could not be saved"**
+[Extract Subtitle File](#extract-subtitle-file) and
+[Save Subtitles as Separate Files](#save-subtitles-as-separate-files) need `ffprobe.exe`. Make sure it is in the same
 folder as `ffmpeg.exe`, or on the system PATH.
 
 **"No subtitle streams were found in the selected file."**

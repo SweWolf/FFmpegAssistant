@@ -46,6 +46,8 @@ the downloaded file and tries again if the download fails.</p>
 File Name</a></li>
 <li><a href="#enable-watching-while-downloading">Enable Watching While
 Downloading</a></li>
+<li><a href="#save-subtitles-as-separate-files">Save Subtitles as
+Separate Files</a></li>
 <li><a href="#downloading">Downloading</a></li>
 <li><a href="#progress-and-status">Progress and Status</a></li>
 </ul></li>
@@ -67,9 +69,9 @@ Download</a></li>
 download. Download it from <a href="https://ffmpeg.org/download.html">ffmpeg.org</a> and install it so
 that it is on the system PATH, or tell FFmpeg Assistant where
 <code>ffmpeg.exe</code> is under <strong>Tools &gt; Settings</strong>.
-<a href="#extract-subtitle-file">Extract Subtitle File</a> also needs
-<code>ffprobe.exe</code>, which comes with FFmpeg. Keep it in the same
-folder as <code>ffmpeg.exe</code>.</li>
+<a href="#extract-subtitle-file">Extract Subtitle File</a> and <a href="#save-subtitles-as-separate-files">Save Subtitles as Separate
+Files</a> also need <code>ffprobe.exe</code>, which comes with FFmpeg.
+Keep it in the same folder as <code>ffmpeg.exe</code>.</li>
 <li>The web browser extension <a href="https://stefansundin.github.io/privatkopiera">Privatkopiera</a>,
 which creates the FFmpeg commands.</li>
 <li>The small download of FFmpeg Assistant also needs .NET 10. The
@@ -202,6 +204,33 @@ finished, because you are already watching. If you uncheck the box
 before the download is finished, you get the usual notification. Errors
 are always shown.</p>
 <p>This option is not used for subtitle files.</p>
+<h3 id="save-subtitles-as-separate-files">Save Subtitles as Separate
+Files</h3>
+<p>Check <strong>Save Subtitles as Separate Files</strong> to save the
+subtitles that are stored inside the downloaded video as
+<code>.srt</code> files in the same folder. Some players and TVs only
+show subtitles from a separate file.</p>
+<p>The box is read when the download is finished and the file has been
+checked, not when you click <strong>Download</strong>. So you can still
+check or uncheck it during the download. Status then shows “Download
+finished, extracting subtitles…”. Only after that is the download done,
+and you get the usual notification.</p>
+<p>The subtitle file gets the same name as the video, for example
+<code>My Movie.srt</code>. If the video has several subtitle tracks,
+each file also gets the language of the track, and <code>forced</code>
+or <code>sdh</code> (subtitles for the deaf and hard of hearing) if the
+track is marked that way: <code>My Movie.eng.srt</code>,
+<code>My Movie.swe.srt</code>, <code>My Movie.eng.forced.srt</code>. A
+track without a language gets its number instead, for example
+<code>My Movie.3.srt</code>. Most players, such as VLC, Plex and Kodi,
+understand these names.</p>
+<p>If a subtitle file already exists, you are asked whether to overwrite
+it. Click <strong>No</strong> to keep the existing file.</p>
+<p>Subtitles that are stored as pictures (for example on Blu-ray and
+DVD) can’t be saved as <code>.srt</code> and are skipped. If the video
+has no subtitles, Status says so. If saving the subtitles fails, FFmpeg
+Assistant shows what went wrong. The downloaded video is not
+affected.</p>
 <h3 id="downloading">Downloading</h3>
 <ul>
 <li><strong>Download</strong> starts the download.</li>
@@ -296,6 +325,9 @@ FFmpeg reads the whole file to make sure it is not damaged. This is the
 download.</li>
 <li><strong>Rename it.</strong> Only when the file is OK is
 <code>(part)</code> removed from the name.</li>
+<li><strong>Save the subtitles</strong>, if <strong>Save Subtitles as
+Separate Files</strong> is checked (see <a href="#save-subtitles-as-separate-files">Save Subtitles as Separate
+Files</a>).</li>
 </ol>
 <p>If the download or the check fails, it is tried again automatically
 (see <a href="#auto-retry-on-download-failure">Auto-Retry on Download
@@ -471,9 +503,12 @@ Windows doesn’t allow, such as <code>?</code>, <code>*</code>,
 validation.”</strong> After <a href="#validate-video-file">Validate
 Video File</a>, the <strong>Command</strong> box shows the command of
 the check. Paste a download command to start a download.</p>
-<p><strong>“Could not probe the file”</strong> <a href="#extract-subtitle-file">Extract Subtitle File</a> needs
-<code>ffprobe.exe</code>. Make sure it is in the same folder as
-<code>ffmpeg.exe</code>, or on the system PATH.</p>
+<p><strong>“Could not probe the file”</strong> or <strong>“the subtitles
+could not be saved”</strong> <a href="#extract-subtitle-file">Extract
+Subtitle File</a> and <a href="#save-subtitles-as-separate-files">Save
+Subtitles as Separate Files</a> need <code>ffprobe.exe</code>. Make sure
+it is in the same folder as <code>ffmpeg.exe</code>, or on the system
+PATH.</p>
 <p><strong>“No subtitle streams were found in the selected
 file.”</strong> The video file doesn’t contain any subtitles.</p>
 <p><strong>The episode number is not suggested.</strong> FFmpeg

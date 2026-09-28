@@ -53,15 +53,14 @@ namespace FFmpegAssistant
             subtitlesToolStripMenuItem = new ToolStripMenuItem();
             mnuExtractSubtitleFile = new ToolStripMenuItem();
             menuHelp = new ToolStripMenuItem();
-            menuAbout = new ToolStripMenuItem();
             menuViewHelp = new ToolStripMenuItem();
             menuViewHelpSeparator = new ToolStripSeparator();
+            menuAbout = new ToolStripMenuItem();
             menuNewVersion = new ToolStripMenuItem();
             btnClear = new Button();
             label4 = new Label();
             txtStatus = new Label();
             groupBox1 = new GroupBox();
-            pnlContent = new Panel();
             txtYear = new TextBox();
             lblYear = new Label();
             txtTitle = new TextBox();
@@ -72,10 +71,12 @@ namespace FFmpegAssistant
             txtSeason = new TextBox();
             rdoTvShow = new RadioButton();
             rdoMovie = new RadioButton();
-            toolTip1 = new ToolTip(components);
-            chkEnableWatchingWhileDownloading = new CheckBox();
-            label6 = new Label();
+            pnlContent = new Panel();
             txtAttempt = new TextBox();
+            label6 = new Label();
+            chkEnableWatchingWhileDownloading = new CheckBox();
+            toolTip1 = new ToolTip(components);
+            chkSaveSubtitlesAsSeparateFiles = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -162,7 +163,7 @@ namespace FFmpegAssistant
             btnRun.Location = new Point(12, 385);
             btnRun.Name = "btnRun";
             btnRun.Size = new Size(153, 44);
-            btnRun.TabIndex = 5;
+            btnRun.TabIndex = 6;
             btnRun.Text = "Download";
             toolTip1.SetToolTip(btnRun, "FFmpeg runs the command and downloads the video file");
             btnRun.UseVisualStyleBackColor = true;
@@ -174,7 +175,7 @@ namespace FFmpegAssistant
             btnCancel.Location = new Point(187, 385);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(153, 44);
-            btnCancel.TabIndex = 6;
+            btnCancel.TabIndex = 7;
             btnCancel.Text = "Cancel";
             toolTip1.SetToolTip(btnCancel, "Cancel the download in progress");
             btnCancel.UseVisualStyleBackColor = true;
@@ -192,7 +193,7 @@ namespace FFmpegAssistant
             dgvProgress.RowHeadersVisible = false;
             dgvProgress.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvProgress.Size = new Size(365, 198);
-            dgvProgress.TabIndex = 8;
+            dgvProgress.TabIndex = 9;
             dgvProgress.TabStop = false;
             toolTip1.SetToolTip(dgvProgress, "Feedback from FFmpeg");
             // 
@@ -202,7 +203,7 @@ namespace FFmpegAssistant
             progressBar.Location = new Point(14, 742);
             progressBar.Name = "progressBar";
             progressBar.Size = new Size(1048, 23);
-            progressBar.TabIndex = 9;
+            progressBar.TabIndex = 10;
             // 
             // btnOpenFile
             // 
@@ -211,7 +212,7 @@ namespace FFmpegAssistant
             btnOpenFile.Location = new Point(14, 777);
             btnOpenFile.Name = "btnOpenFile";
             btnOpenFile.Size = new Size(153, 36);
-            btnOpenFile.TabIndex = 10;
+            btnOpenFile.TabIndex = 11;
             btnOpenFile.Text = "Open File";
             toolTip1.SetToolTip(btnOpenFile, "Open the downloaded video/audio file in the associated application");
             btnOpenFile.UseVisualStyleBackColor = true;
@@ -224,7 +225,7 @@ namespace FFmpegAssistant
             btnOpenFolder.Location = new Point(189, 777);
             btnOpenFolder.Name = "btnOpenFolder";
             btnOpenFolder.Size = new Size(153, 36);
-            btnOpenFolder.TabIndex = 11;
+            btnOpenFolder.TabIndex = 12;
             btnOpenFolder.Text = "Open Folder";
             toolTip1.SetToolTip(btnOpenFolder, "Open the folder in the Windows File Explorer");
             btnOpenFolder.UseVisualStyleBackColor = true;
@@ -237,7 +238,7 @@ namespace FFmpegAssistant
             btnOpenLogFile.Location = new Point(365, 777);
             btnOpenLogFile.Name = "btnOpenLogFile";
             btnOpenLogFile.Size = new Size(153, 36);
-            btnOpenLogFile.TabIndex = 12;
+            btnOpenLogFile.TabIndex = 13;
             btnOpenLogFile.Text = "Open Log File";
             toolTip1.SetToolTip(btnOpenLogFile, "Open FFmpeg's log file");
             btnOpenLogFile.UseVisualStyleBackColor = true;
@@ -272,21 +273,21 @@ namespace FFmpegAssistant
             // menuCreateShortcut
             // 
             menuCreateShortcut.Name = "menuCreateShortcut";
-            menuCreateShortcut.Size = new Size(165, 22);
+            menuCreateShortcut.Size = new Size(178, 22);
             menuCreateShortcut.Text = "Create Shortcut...";
             menuCreateShortcut.Click += menuCreateShortcut_Click;
             // 
             // menuSettings
             // 
             menuSettings.Name = "menuSettings";
-            menuSettings.Size = new Size(165, 22);
+            menuSettings.Size = new Size(178, 22);
             menuSettings.Text = "Settings";
             menuSettings.Click += menuSettings_Click_1;
             // 
             // mnuValidateVideoFile
             // 
             mnuValidateVideoFile.Name = "mnuValidateVideoFile";
-            mnuValidateVideoFile.Size = new Size(165, 22);
+            mnuValidateVideoFile.Size = new Size(178, 22);
             mnuValidateVideoFile.Text = "Validate Video File...";
             mnuValidateVideoFile.Click += mnuValidateVideoFile_Click;
             // 
@@ -310,24 +311,24 @@ namespace FFmpegAssistant
             menuHelp.Name = "menuHelp";
             menuHelp.Size = new Size(44, 20);
             menuHelp.Text = "Help";
-            //
+            // 
             // menuViewHelp
-            //
+            // 
             menuViewHelp.Name = "menuViewHelp";
             menuViewHelp.ShortcutKeys = Keys.F1;
-            menuViewHelp.Size = new Size(210, 22);
+            menuViewHelp.Size = new Size(214, 22);
             menuViewHelp.Text = "FFmpeg Assistant Help";
             menuViewHelp.Click += menuViewHelp_Click;
-            //
+            // 
             // menuViewHelpSeparator
-            //
+            // 
             menuViewHelpSeparator.Name = "menuViewHelpSeparator";
-            menuViewHelpSeparator.Size = new Size(207, 6);
-            //
+            menuViewHelpSeparator.Size = new Size(211, 6);
+            // 
             // menuAbout
             // 
             menuAbout.Name = "menuAbout";
-            menuAbout.Size = new Size(107, 22);
+            menuAbout.Size = new Size(214, 22);
             menuAbout.Text = "About";
             menuAbout.Click += menuAbout_Click;
             // 
@@ -348,7 +349,7 @@ namespace FFmpegAssistant
             btnClear.Location = new Point(363, 385);
             btnClear.Name = "btnClear";
             btnClear.Size = new Size(153, 44);
-            btnClear.TabIndex = 7;
+            btnClear.TabIndex = 8;
             btnClear.Text = "Clear";
             toolTip1.SetToolTip(btnClear, "Clear the boxes on the screen");
             btnClear.UseVisualStyleBackColor = true;
@@ -504,43 +505,10 @@ namespace FFmpegAssistant
             rdoMovie.UseVisualStyleBackColor = true;
             rdoMovie.CheckedChanged += rdoMovie_CheckedChanged;
             // 
-            // chkEnableWatchingWhileDownloading
-            // 
-            chkEnableWatchingWhileDownloading.AutoSize = true;
-            chkEnableWatchingWhileDownloading.Font = new Font("Segoe UI", 12F);
-            chkEnableWatchingWhileDownloading.Location = new Point(12, 346);
-            chkEnableWatchingWhileDownloading.Name = "chkEnableWatchingWhileDownloading";
-            chkEnableWatchingWhileDownloading.Size = new Size(285, 25);
-            chkEnableWatchingWhileDownloading.TabIndex = 4;
-            chkEnableWatchingWhileDownloading.Text = "Enable Watching While Downloading";
-            toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, "Downloads as a .ts file first so you can watch while downloading, then converts to the final format automatically.\nNo sound, message box or taskbar flash when the download is finished, unless you uncheck this box before then (errors are always shown).");
-            chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
-            // 
-            // label6
-            // 
-            label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            label6.AutoSize = true;
-            label6.Font = new Font("Segoe UI", 10F);
-            label6.Location = new Point(937, 692);
-            label6.Name = "label6";
-            label6.Size = new Size(60, 19);
-            label6.TabIndex = 17;
-            label6.Text = "Attempt";
-            // 
-            // txtAttempt
-            // 
-            txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            txtAttempt.BorderStyle = BorderStyle.FixedSingle;
-            txtAttempt.Location = new Point(1003, 692);
-            txtAttempt.Name = "txtAttempt";
-            txtAttempt.ReadOnly = true;
-            txtAttempt.Size = new Size(59, 23);
-            txtAttempt.TabIndex = 18;
-            txtAttempt.TabStop = false;
-            // 
             // pnlContent
             // 
             pnlContent.AutoScroll = true;
+            pnlContent.Controls.Add(chkSaveSubtitlesAsSeparateFiles);
             pnlContent.Controls.Add(txtAttempt);
             pnlContent.Controls.Add(label6);
             pnlContent.Controls.Add(chkEnableWatchingWhileDownloading);
@@ -568,6 +536,52 @@ namespace FFmpegAssistant
             pnlContent.Name = "pnlContent";
             pnlContent.Size = new Size(1074, 825);
             pnlContent.TabIndex = 0;
+            // 
+            // txtAttempt
+            // 
+            txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            txtAttempt.BorderStyle = BorderStyle.FixedSingle;
+            txtAttempt.Location = new Point(1003, 692);
+            txtAttempt.Name = "txtAttempt";
+            txtAttempt.ReadOnly = true;
+            txtAttempt.Size = new Size(59, 23);
+            txtAttempt.TabIndex = 18;
+            txtAttempt.TabStop = false;
+            // 
+            // label6
+            // 
+            label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            label6.AutoSize = true;
+            label6.Font = new Font("Segoe UI", 10F);
+            label6.Location = new Point(937, 692);
+            label6.Name = "label6";
+            label6.Size = new Size(60, 19);
+            label6.TabIndex = 17;
+            label6.Text = "Attempt";
+            // 
+            // chkEnableWatchingWhileDownloading
+            // 
+            chkEnableWatchingWhileDownloading.AutoSize = true;
+            chkEnableWatchingWhileDownloading.Font = new Font("Segoe UI", 12F);
+            chkEnableWatchingWhileDownloading.Location = new Point(12, 346);
+            chkEnableWatchingWhileDownloading.Name = "chkEnableWatchingWhileDownloading";
+            chkEnableWatchingWhileDownloading.Size = new Size(285, 25);
+            chkEnableWatchingWhileDownloading.TabIndex = 4;
+            chkEnableWatchingWhileDownloading.Text = "Enable Watching While Downloading";
+            toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, resources.GetString("chkEnableWatchingWhileDownloading.ToolTip"));
+            chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
+            // 
+            // chkSaveSubtitlesAsSeparateFiles
+            // 
+            chkSaveSubtitlesAsSeparateFiles.AutoSize = true;
+            chkSaveSubtitlesAsSeparateFiles.Font = new Font("Segoe UI", 12F);
+            chkSaveSubtitlesAsSeparateFiles.Location = new Point(414, 346);
+            chkSaveSubtitlesAsSeparateFiles.Name = "chkSaveSubtitlesAsSeparateFiles";
+            chkSaveSubtitlesAsSeparateFiles.Size = new Size(247, 25);
+            chkSaveSubtitlesAsSeparateFiles.TabIndex = 5;
+            chkSaveSubtitlesAsSeparateFiles.Text = "Save Subtitles as Separate Files";
+            toolTip1.SetToolTip(chkSaveSubtitlesAsSeparateFiles, resources.GetString("chkSaveSubtitlesAsSeparateFiles.ToolTip"));
+            chkSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
@@ -643,5 +657,6 @@ namespace FFmpegAssistant
         private TextBox txtTitle;
         private Label lblTitle;
         private TextBox txtYear;
+        private CheckBox chkSaveSubtitlesAsSeparateFiles;
     }
 }
