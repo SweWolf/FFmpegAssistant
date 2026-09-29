@@ -67,7 +67,7 @@ namespace FFmpegAssistant
         private const int SpeedSampleCount = 5;
 
         /// <summary>
-        /// When true, grid values are formatted for readability (normalised elapsed time,
+        /// When true, grid values are formatted for readability (times as "4:36" without fractions,
         /// size converted to MB). When false, raw FFmpeg output is shown as-is.
         /// Future: expose this in a Settings dialog.
         /// </summary>
@@ -628,7 +628,9 @@ namespace FFmpegAssistant
                         int.Parse(dm.Groups[3].Value),
                         int.Parse(dm.Groups[4].Value.PadRight(3, '0')[..3]));
 
-                    Invoke(() => UpdateGridRow("Duration", _totalDuration.ToString(@"hh\:mm\:ss")));
+                    Invoke(() => UpdateGridRow("Duration", AdjustedFeedback
+                        ? FormatClock(_totalDuration)
+                        : _totalDuration.ToString(@"hh\:mm\:ss")));
                     if (!_isValidating)
                     {
                         SetStatus("Starting download...");
@@ -717,7 +719,7 @@ namespace FFmpegAssistant
                 UpdateGridRow("Frame", frame);
                 UpdateGridRow("FPS", fps);
                 UpdateGridRow("Size", displaySize);
-                UpdateGridRow("Time", time);
+                UpdateGridRow("Time", AdjustedFeedback ? FormatElapsed(time) : time);
                 UpdateGridRow("Bitrate", bitrate);
                 UpdateGridRow("Speed", speed);
                 UpdateGridRow("Elapsed", displayElapsed);
@@ -733,13 +735,25 @@ namespace FFmpegAssistant
             });
         }
 
-        /// <summary>Normalises FFmpeg elapsed string (e.g. "0:00:36.63") to HH:mm:ss.</summary>
+        /// <summary>
+        /// Shortens an FFmpeg time or elapsed string (e.g. "00:04:36.48") with <see cref="FormatClock"/>:
+        /// "4:36". A negative time (FFmpeg reports one at the very start) shows as "0:00".
+        /// Other text (e.g. "N/A") is shown as it is.
+        /// </summary>
         private static string FormatElapsed(string raw)
         {
             if (TimeSpan.TryParse(raw, CultureInfo.InvariantCulture, out var ts))
-                return ts.ToString(@"hh\:mm\:ss");
+                return FormatClock(ts < TimeSpan.Zero ? TimeSpan.Zero : ts);
             return raw;
         }
+
+        /// <summary>
+        /// A time for the progress grid, without fractions and with hours only from one hour:
+        /// "4:36", "22:09", "1:05:12". Seconds are cut off, not rounded, as a clock shows them.
+        /// </summary>
+        private static string FormatClock(TimeSpan ts) => ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}:" + ts.ToString(@"mm\:ss")
+            : $"{(int)ts.TotalMinutes}:{ts:ss}";
 
         /// <summary>Converts FFmpeg size string (e.g. "73984KiB") to MB with one decimal.</summary>
         private static string FormatSize(string raw)
