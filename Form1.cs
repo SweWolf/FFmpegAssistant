@@ -39,7 +39,7 @@ namespace FFmpegAssistant
         private bool _cancelQueue;     // Cancel > Yes: remove the waiting downloads when the current one has ended
         private int _jobsStartedInRun; // downloads started since the queue started, for the Job box ("2/5")
         private QueueForm? _queueForm;
-        private string? _startedCommand; // the Command box of the last download started or queued: see UpdateRunButton
+        private bool _runBlockedUntilEdit; // the fields were just downloaded or queued: see UpdateRunButton
 
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -237,7 +237,7 @@ namespace FFmpegAssistant
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
-                UpdateRunButton(); // a changed command can be downloaded (again)
+                UnblockRunButton(); // an edited command can be downloaded (again)
                 if (!_downloadRunning)
                     ClearStatus();
                 if (!_settingExtractCommand)
@@ -245,9 +245,11 @@ namespace FFmpegAssistant
             };
             txtFileName.TextChanged += (s, _) =>
             {
+                UnblockRunButton(); // e.g. the same video under another name
                 if (!_downloadRunning)
                     ClearStatus();
             };
+            cboFolder.TextChanged += (s, _) => UnblockRunButton(); // e.g. the same video in another folder
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
             string? startup = _startupCommand;
@@ -851,15 +853,15 @@ namespace FFmpegAssistant
                 _queue.ClearFinished();
             }
             _queue.Add(job);
-            _startedCommand = txtOriginalCommand.Text.Trim();
-            UpdateRunButton();
 
             if (_queueRunning) // added to the queue (also if the queue ended during the pre-fetch: then it runs now)
             {
                 UpdateJobBox();
                 SuggestNextEpisode(cboFolder.Text); // the queued episode counts, so this moves on to the next one
+                BlockRunUntilEdit(); // after the suggestion: the app changing File Name isn't an edit
                 return;
             }
+            BlockRunUntilEdit();
             await RunQueueAsync();
         }
 
@@ -906,12 +908,9 @@ namespace FFmpegAssistant
                     _queue.Update();
                     finished.Add(entry);
 
-                    // A failed download can be tried again with the same command
-                    if (outcome == QueueStatus.Failed && entry.Job.OriginalCommand == _startedCommand)
-                    {
-                        _startedCommand = null;
-                        UpdateRunButton();
-                    }
+                    // A failed or cancelled download can be started again with the same fields
+                    if (outcome is QueueStatus.Failed or QueueStatus.Cancelled)
+                        UnblockRunButton();
 
                     if (_cancelQueue)
                     {
@@ -998,9 +997,9 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Download, or "Add to Queue" while downloads run. Disabled while a download is prepared, during
-        /// Tools > Validate Video File, and when the command was already downloaded or queued, until the
-        /// Command box is changed: the same video twice is no use (and this stops a double click).
-        /// If that download fails, the button is enabled again, to try again.
+        /// Tools > Validate Video File, and after a download is started or queued, until Command, Folder
+        /// or File Name is edited: the same video twice is no use (and this stops a double click).
+        /// A failed or cancelled download enables it again, to start it again.
         /// Validate Video File and Extract Subtitle File are disabled during a download: they replace
         /// the fields.
         /// </summary>
@@ -1010,11 +1009,22 @@ namespace FFmpegAssistant
             toolTip1.SetToolTip(btnRun, _queueRunning
                 ? "Add this download to the queue: it starts when the downloads before it have finished"
                 : "FFmpeg runs the command and downloads the video file");
-            bool commandUsed = _startedCommand != null &&
-                               string.Equals(txtOriginalCommand.Text.Trim(), _startedCommand, StringComparison.Ordinal);
-            btnRun.Enabled = !_preparingJob && (_queueRunning || !_downloadRunning) && !commandUsed;
+            btnRun.Enabled = !_preparingJob && (_queueRunning || !_downloadRunning) && !_runBlockedUntilEdit;
             mnuValidateVideoFile.Enabled = !_downloadRunning;
             mnuExtractSubtitleFile.Enabled = !_downloadRunning;
+        }
+
+        private void BlockRunUntilEdit()
+        {
+            _runBlockedUntilEdit = true;
+            UpdateRunButton();
+        }
+
+        private void UnblockRunButton()
+        {
+            if (!_runBlockedUntilEdit) return;
+            _runBlockedUntilEdit = false;
+            UpdateRunButton();
         }
 
         /// <summary>The Job box: "2/5" means the second of five downloads is running.</summary>

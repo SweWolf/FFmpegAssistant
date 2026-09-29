@@ -16,7 +16,7 @@ namespace FFmpegAssistant
     {
         /// <summary>The FFmpeg command to run, with the output replaced by <see cref="DownloadPath"/>.</summary>
         public required string Command { get; init; }
-        /// <summary>The command as it was in the Command box (see Form1.UpdateRunButton).</summary>
+        /// <summary>The command as it was in the Command box, before the output was replaced.</summary>
         public string OriginalCommand { get; init; } = "";
         public required string Folder { get; init; }
         public required string FileName { get; init; }

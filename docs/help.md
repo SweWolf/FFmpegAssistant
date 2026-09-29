@@ -191,9 +191,9 @@ FFmpeg Assistant shows what went wrong. The downloaded video is not affected.
 
 - **Download** starts the download. During a download the button is called **Add to Queue**: it
   adds the next download to the [Download Queue](#download-queue). Once a command is downloading
-  or in the queue, the button is disabled until you change the **Command**, so the same video
-  isn't downloaded twice by mistake. If the download fails, the button is enabled again, so you
-  can try again.
+  or in the queue, the button is disabled until you change the **Command**, **Folder** or
+  **File Name**, so the same video isn't downloaded twice by mistake. If the download fails or you
+  cancel it, the button is enabled again, so you can start it again.
 - **Cancel** stops the download. If a partial file was saved, you are asked whether to delete it.
   If more downloads are waiting in the queue, you are first asked whether to cancel them too.
 - **Clear** empties all the boxes, so you can start over. During a download it only empties the
