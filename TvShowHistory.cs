@@ -154,6 +154,10 @@ namespace FFmpegAssistant
                 if (!found)
                     lines.Add($"{showName}\t{subfolder}");
 
+                // Drop empty lines: the line break at the end of the file is read as an empty last
+                // line, so without this every save added one more
+                lines.RemoveAll(string.IsNullOrWhiteSpace);
+
                 // Write UTF-8 with BOM so encoding is unambiguous on all future reads
                 File.WriteAllLines(FilePath, lines, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             }

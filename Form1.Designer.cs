@@ -47,6 +47,7 @@ namespace FFmpegAssistant
             lblEstimatedRemaining = new Label();
             menuStrip = new MenuStrip();
             menuTools = new ToolStripMenuItem();
+            menuDownloadQueue = new ToolStripMenuItem();
             menuCreateShortcut = new ToolStripMenuItem();
             menuSettings = new ToolStripMenuItem();
             mnuValidateVideoFile = new ToolStripMenuItem();
@@ -74,6 +75,8 @@ namespace FFmpegAssistant
             pnlContent = new Panel();
             txtAttempt = new TextBox();
             label6 = new Label();
+            txtJob = new TextBox();
+            lblJob = new Label();
             chkEnableWatchingWhileDownloading = new CheckBox();
             toolTip1 = new ToolTip(components);
             chkSaveSubtitlesAsSeparateFiles = new CheckBox();
@@ -177,7 +180,7 @@ namespace FFmpegAssistant
             btnCancel.Size = new Size(153, 44);
             btnCancel.TabIndex = 7;
             btnCancel.Text = "Cancel";
-            toolTip1.SetToolTip(btnCancel, "Cancel the download in progress");
+            toolTip1.SetToolTip(btnCancel, "Cancel the download in progress, or the whole queue");
             btnCancel.UseVisualStyleBackColor = true;
             btnCancel.Click += btnCancel_Click;
             // 
@@ -265,10 +268,17 @@ namespace FFmpegAssistant
             // 
             // menuTools
             // 
-            menuTools.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut, menuSettings, mnuValidateVideoFile });
+            menuTools.DropDownItems.AddRange(new ToolStripItem[] { menuCreateShortcut, menuSettings, menuDownloadQueue, mnuValidateVideoFile });
             menuTools.Name = "menuTools";
             menuTools.Size = new Size(47, 20);
             menuTools.Text = "Tools";
+            // 
+            // menuDownloadQueue
+            // 
+            menuDownloadQueue.Name = "menuDownloadQueue";
+            menuDownloadQueue.Size = new Size(178, 22);
+            menuDownloadQueue.Text = "Download Queue";
+            menuDownloadQueue.Click += menuDownloadQueue_Click;
             // 
             // menuCreateShortcut
             // 
@@ -374,7 +384,7 @@ namespace FFmpegAssistant
             txtStatus.Location = new Point(67, 692);
             txtStatus.Name = "txtStatus";
             txtStatus.Padding = new Padding(5, 0, 0, 0);
-            txtStatus.Size = new Size(824, 23);
+            txtStatus.Size = new Size(682, 23);
             txtStatus.TabIndex = 9;
             txtStatus.TextAlign = ContentAlignment.MiddleLeft;
             // 
@@ -509,6 +519,8 @@ namespace FFmpegAssistant
             // 
             pnlContent.AutoScroll = true;
             pnlContent.Controls.Add(chkSaveSubtitlesAsSeparateFiles);
+            pnlContent.Controls.Add(txtJob);
+            pnlContent.Controls.Add(lblJob);
             pnlContent.Controls.Add(txtAttempt);
             pnlContent.Controls.Add(label6);
             pnlContent.Controls.Add(chkEnableWatchingWhileDownloading);
@@ -541,19 +553,44 @@ namespace FFmpegAssistant
             // 
             txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             txtAttempt.BorderStyle = BorderStyle.FixedSingle;
-            txtAttempt.Location = new Point(1003, 692);
+            txtAttempt.Location = new Point(861, 692);
             txtAttempt.Name = "txtAttempt";
             txtAttempt.ReadOnly = true;
             txtAttempt.Size = new Size(59, 23);
             txtAttempt.TabIndex = 18;
             txtAttempt.TabStop = false;
             // 
+            // txtJob
+            // 
+            txtJob.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            txtJob.BorderStyle = BorderStyle.FixedSingle;
+            txtJob.Cursor = Cursors.Hand;
+            txtJob.Location = new Point(1003, 692);
+            txtJob.Name = "txtJob";
+            txtJob.ReadOnly = true;
+            txtJob.Size = new Size(59, 23);
+            txtJob.TabIndex = 20;
+            txtJob.TabStop = false;
+            toolTip1.SetToolTip(txtJob, "Which download of the queue is running, e.g. 2/5. Click to show the download queue.");
+            txtJob.Click += txtJob_Click;
+            // 
+            // lblJob
+            // 
+            lblJob.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            lblJob.AutoSize = true;
+            lblJob.Font = new Font("Segoe UI", 10F);
+            lblJob.Location = new Point(966, 692);
+            lblJob.Name = "lblJob";
+            lblJob.Size = new Size(31, 19);
+            lblJob.TabIndex = 19;
+            lblJob.Text = "Job";
+            // 
             // label6
             // 
             label6.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label6.AutoSize = true;
             label6.Font = new Font("Segoe UI", 10F);
-            label6.Location = new Point(937, 692);
+            label6.Location = new Point(795, 692);
             label6.Name = "label6";
             label6.Size = new Size(60, 19);
             label6.TabIndex = 17;
@@ -626,6 +663,7 @@ namespace FFmpegAssistant
         private Button btnOpenFolder;
         private MenuStrip menuStrip;
         private ToolStripMenuItem menuTools;
+        private ToolStripMenuItem menuDownloadQueue;
         private ToolStripMenuItem menuCreateShortcut;
         private ToolStripMenuItem menuHelp;
         private ToolStripMenuItem menuAbout;
@@ -651,6 +689,8 @@ namespace FFmpegAssistant
         private TextBox txtSeason;
         private Label label6;
         private TextBox txtAttempt;
+        private Label lblJob;
+        private TextBox txtJob;
         private ToolStripMenuItem subtitlesToolStripMenuItem;
         private ToolStripMenuItem mnuExtractSubtitleFile;
         private Label lblYear;

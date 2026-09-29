@@ -15,6 +15,7 @@ namespace FFmpegAssistant
         private string? _lastLogFile;
         private CancellationTokenSource? _cts;
         private bool _progressStarted;
+        private bool _startingDownloadShown; // Status shows "Starting download...": the first progress line replaces it
         private bool _isValidating;
         private bool _validationOnly; // Tools > Validate Video File: no download, progress bar runs 0-100 %
         private string? _validationCommand; // the last validation's command, shown in the Command box
@@ -31,6 +32,15 @@ namespace FFmpegAssistant
         private bool _downloadRunning; // from the Download click until the run has ended, including the M3U8 pre-fetch
         private bool _runInWatchMode;  // the running download was started with "Enable Watching While Downloading"
 
+        // Download queue: while downloads run, Download becomes "Add to Queue" (see RunQueueAsync)
+        private readonly DownloadQueue _queue = new();
+        private bool _queueRunning;    // RunQueueAsync is running the downloads in the queue
+        private bool _preparingJob;    // PrepareDownloadJobAsync is checking a new download (e.g. the M3U8 pre-fetch)
+        private bool _cancelQueue;     // Cancel > Yes: remove the waiting downloads when the current one has ended
+        private int _jobsStartedInRun; // downloads started since the queue started, for the Job box ("2/5")
+        private QueueForm? _queueForm;
+        private string? _startedCommand; // the Command box of the last download started or queued: see UpdateRunButton
+
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _extraFolders = new(); // from Settings, see RefreshExtraFolders
@@ -39,8 +49,6 @@ namespace FFmpegAssistant
         // -------------------------------------------------------------------------
         // Estimated remaining time — speed sampling
         // -------------------------------------------------------------------------
-
-        private enum M3u8ContentType { Unknown, Subtitle, Video }
 
         /// <summary>
         /// Severity of a status message, used to color-code <see cref="txtStatus"/>
@@ -128,6 +136,10 @@ namespace FFmpegAssistant
                 _ = CheckForUpdatesAsync();
 
             SendMessage(txtAttempt.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
+            SendMessage(txtJob.Handle, EM_SETMARGINS, EC_LEFTMARGIN, 5);
+
+            // Downloads left in the queue from the last time (e.g. a power outage): ask once the window shows
+            Shown += async (s, _) => await ResumeSavedQueueAsync();
 
             InitializeProgressGrid();
 
@@ -209,14 +221,14 @@ namespace FFmpegAssistant
                         if (outFile != null)
                             txtFileName.Text = outFile;
                     }
-                    TryApplyTvShowHistory(cmd);
+                    TryApplyTvShowHistory(cmd, setTitle: true);
                 }
             };
             // Also trigger when the box loses focus (catches manual edits)
             txtOriginalCommand.Leave += (s, _) =>
             {
                 if (!IsValidationCommandShown(txtOriginalCommand.Text.Trim()))
-                    TryApplyTvShowHistory(txtOriginalCommand.Text.Trim());
+                    TryApplyTvShowHistory(txtOriginalCommand.Text.Trim(), setTitle: false);
             };
 
             // Clear status when the user starts editing the input fields (e.g. an old "Done" or error),
@@ -225,6 +237,7 @@ namespace FFmpegAssistant
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
+                UpdateRunButton(); // a changed command can be downloaded (again)
                 if (!_downloadRunning)
                     ClearStatus();
                 if (!_settingExtractCommand)
@@ -259,7 +272,7 @@ namespace FFmpegAssistant
                     if (_startupCommand == null) // came from clipboard — place cursor at start, don't select all
                         BeginInvoke(() => { txtOriginalCommand.SelectionStart = 0; txtOriginalCommand.SelectionLength = 0; });
                     // Defer until after the form is fully shown so the ComboBox updates correctly
-                    BeginInvoke(() => TryApplyTvShowHistory(startup));
+                    BeginInvoke(() => TryApplyTvShowHistory(startup, setTitle: true));
                 }
             }
         }
@@ -442,6 +455,7 @@ namespace FFmpegAssistant
         {
             _totalDuration = TimeSpan.Zero;
             _progressStarted = false;
+            _startingDownloadShown = false;
             _isValidating = false;
             _m3u8SegmentsOpened = 0;
             _speedSamples.Clear();
@@ -537,8 +551,9 @@ namespace FFmpegAssistant
         /// "Enable Watching While Downloading" is still checked: the user is watching the video, so only
         /// the status shows "Done" (errors are still reported). Unchecking it during the download brings
         /// the usual notification back; checking it during a normal download doesn't silence that one.
+        /// After a queue it runs once, for all the downloads (<paramref name="downloadCount"/>).
         /// </summary>
-        private void NotifyDownloadFinished(bool watchMode)
+        private void NotifyDownloadFinished(bool watchMode, int downloadCount = 1)
         {
             if (_closeAfterCancel || (watchMode && chkEnableWatchingWhileDownloading.Checked)) return;
 
@@ -547,7 +562,8 @@ namespace FFmpegAssistant
             switch (AppSettings.ActionWhenDownloadFinished)
             {
                 case "Message Box":
-                    MessageBox.Show("The download is complete.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(downloadCount == 1 ? "The download is complete." : $"All {downloadCount} downloads are complete.",
+                        AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     break;
                 case "None":
                     break;
@@ -614,7 +630,13 @@ namespace FFmpegAssistant
 
                     Invoke(() => UpdateGridRow("Duration", _totalDuration.ToString(@"hh\:mm\:ss")));
                     if (!_isValidating)
+                    {
                         SetStatus("Starting download...");
+                        // For HLS, FFmpeg opens the first segment before it reports the Duration, so the
+                        // segment count above may already have set _progressStarted: "Downloading..."
+                        // must still follow, or "Starting download..." stays for the whole download
+                        _startingDownloadShown = true;
+                    }
                     return;
                 }
             }
@@ -679,9 +701,10 @@ namespace FFmpegAssistant
                 }
             }
 
-            if (!_progressStarted)
+            if (!_progressStarted || _startingDownloadShown)
             {
                 _progressStarted = true;
+                _startingDownloadShown = false;
                 SetStatus("Downloading...");
             }
 
@@ -769,34 +792,299 @@ namespace FFmpegAssistant
 
         private async void btnRun_Click(object sender, EventArgs e)
         {
-            // Disable Download and Clear right away: the M3U8 pre-fetch at the start of the run can take
-            // several seconds, and a second click meanwhile would start a second, parallel run on the
-            // same files (e.g. "the process cannot access the file" for the FFmpeg log).
-            if (_downloadRunning) return;
+            // Disable Download and Clear right away: the M3U8 pre-fetch while preparing can take several
+            // seconds, and a second click meanwhile would prepare the same download twice (or start a
+            // second, parallel run on the same files).
+            if (_preparingJob) return;
+            if (_downloadRunning && !_queueRunning) return; // Tools > Validate Video File is running
+
+            // While downloading, the button reads "Add to Queue". Only one window can use the queue.
+            bool addToQueue = _queueRunning;
+            if (addToQueue && !_queue.TryTakeOwnership())
+            {
+                MessageBox.Show("Another FFmpeg Assistant window is downloading a queue.\n\n" +
+                                "Add the download in that window, or wait until this download has finished.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             _downloadRunning = true;
-#if DEBUG
-            _statusColorDemoCts?.Cancel();
-#endif
-            btnRun.Enabled = false;
+            _preparingJob = true;
+            UpdateRunButton();
             btnClear.Enabled = false;
+            DownloadJob? job;
             try
             {
-                await RunDownloadAsync();
+                job = await PrepareDownloadJobAsync();
             }
             finally
             {
-                _downloadRunning = false;
-                if (!IsDisposed) // the window may have been closed at the end of a cancelled run
+                _preparingJob = false;
+                if (!_queueRunning) _downloadRunning = false;
+                if (!IsDisposed)
                 {
-                    btnRun.Enabled = true;
+                    UpdateRunButton();
                     btnClear.Enabled = true;
                 }
             }
+            if (job == null || IsDisposed) return;
+
+            if (!_queueRunning)
+            {
+                // A new run. Take the queue if no other window has it: then the download is saved (power
+                // outage) and more can be queued behind it. Otherwise it runs alone, as before the queue.
+                _queue.TryTakeOwnership();
+                _queue.ClearFinished();
+            }
+            _queue.Add(job);
+            _startedCommand = txtOriginalCommand.Text.Trim();
+            UpdateRunButton();
+
+            if (_queueRunning) // added to the queue (also if the queue ended during the pre-fetch: then it runs now)
+            {
+                UpdateJobBox();
+                SuggestNextEpisode(cboFolder.Text); // the queued episode counts, so this moves on to the next one
+                return;
+            }
+            await RunQueueAsync();
         }
 
-        private async Task RunDownloadAsync()
+        /// <summary>
+        /// Runs the waiting downloads in the queue one at a time, until none is left, the user cancels
+        /// the whole queue or closes the window. Then reports the result (see ReportQueueFinished).
+        /// </summary>
+        private async Task RunQueueAsync()
         {
-            ClearStatus();
+            _downloadRunning = true;
+            _queueRunning = true;
+            _cancelQueue = false;
+            _jobsStartedInRun = 0;
+#if DEBUG
+            _statusColorDemoCts?.Cancel();
+#endif
+            UpdateRunButton();
+            var finished = new List<QueueEntry>();
+            try
+            {
+                while (_queue.NextWaiting() is QueueEntry entry)
+                {
+                    entry.Status = QueueStatus.Running;
+                    _jobsStartedInRun++;
+                    _queue.Update();
+                    UpdateJobBox();
+
+                    var (outcome, reason) = await RunDownloadJobAsync(entry.Job);
+
+                    if (_closeAfterCancel)
+                    {
+                        // The window is closing: keep this download in the queue for next time, if others are
+                        // waiting (the closing question said so); a single download is cancelled, as before
+                        if (_queue.WaitingCount > 0)
+                            entry.Status = QueueStatus.Waiting;
+                        else
+                            entry.Status = QueueStatus.Cancelled;
+                        _queue.Update();
+                        break;
+                    }
+
+                    entry.Status = outcome;
+                    entry.Reason = reason;
+                    _queue.Update();
+                    finished.Add(entry);
+
+                    // A failed download can be tried again with the same command
+                    if (outcome == QueueStatus.Failed && entry.Job.OriginalCommand == _startedCommand)
+                    {
+                        _startedCommand = null;
+                        UpdateRunButton();
+                    }
+
+                    if (_cancelQueue)
+                    {
+                        _queue.RemoveWaiting();
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                _queueRunning = false;
+                _downloadRunning = false;
+                _cancelQueue = false;
+                if (!_closeAfterCancel)
+                    _queue.ReleaseOwnershipIfIdle();
+                if (!IsDisposed)
+                {
+                    UpdateRunButton();
+                    btnClear.Enabled = true;
+                    UpdateJobBox();
+                }
+            }
+
+            if (_closeAfterCancel)
+            {
+                _closeAfterCancel = false;
+                Close();
+                return;
+            }
+            ReportQueueFinished(finished);
+        }
+
+        /// <summary>
+        /// After the queue: the Action When Download Finished (Settings) runs once, after the last
+        /// download. If a download failed, a report lists what wasn't downloaded instead: in a queue,
+        /// failures don't stop to show a message, so nobody has to be at the PC.
+        /// </summary>
+        private void ReportQueueFinished(List<QueueEntry> finished)
+        {
+            if (finished.Count == 0) return;
+
+            var failed = finished.Where(e => e.Status == QueueStatus.Failed).ToList();
+            int done = finished.Count(e => e.Status == QueueStatus.Done);
+
+            if (finished.Count == 1)
+            {
+                // A single download has already shown its own result, as before the queue
+                if (done == 1) NotifyDownloadFinished(finished[0].Job.WatchMode);
+                return;
+            }
+
+            if (failed.Count == 0)
+            {
+                if (done == finished.Count)
+                {
+                    SetStatus($"Done: all {finished.Count} downloads were successful.", StatusLevel.Success);
+                    NotifyDownloadFinished(finished[^1].Job.WatchMode, finished.Count);
+                }
+                else
+                {
+                    SetStatus($"{done} of {finished.Count} downloads were successful.");
+                }
+                return;
+            }
+
+            SetStatus($"{done} of {finished.Count} downloads were successful.", StatusLevel.Warning);
+            const int maxListed = 10;
+            var lines = finished.Where(e => e.Status != QueueStatus.Done).Take(maxListed)
+                .Select(e => $"• {e.Job.FileName}: {(e.Status == QueueStatus.Cancelled ? "cancelled" : e.Reason ?? "failed")}");
+            int notDone = finished.Count - done;
+            string more = notDone > maxListed ? $"\n... and {notDone - maxListed} more (see Tools > Download Queue)." : "";
+            TaskbarFlash.FlashIfInactive(this);
+            MessageBox.Show($"{done} of {finished.Count} downloads were successful.\n\n" +
+                            $"Not downloaded:\n{string.Join("\n", lines)}{more}\n\n" +
+                            "Tools > Download Queue shows the full commands.",
+                AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        /// <summary>
+        /// In a queue (more than one download in this run, or more waiting), a failed download doesn't
+        /// stop to show a message box: the queue goes on and the report at the end lists it.
+        /// </summary>
+        private bool IsQueueRun => _jobsStartedInRun > 1 || _queue.WaitingCount > 0;
+
+        /// <summary>
+        /// Download, or "Add to Queue" while downloads run. Disabled while a download is prepared, during
+        /// Tools > Validate Video File, and when the command was already downloaded or queued, until the
+        /// Command box is changed: the same video twice is no use (and this stops a double click).
+        /// If that download fails, the button is enabled again, to try again.
+        /// Validate Video File and Extract Subtitle File are disabled during a download: they replace
+        /// the fields.
+        /// </summary>
+        private void UpdateRunButton()
+        {
+            btnRun.Text = _queueRunning ? "Add to Queue" : "Download";
+            toolTip1.SetToolTip(btnRun, _queueRunning
+                ? "Add this download to the queue: it starts when the downloads before it have finished"
+                : "FFmpeg runs the command and downloads the video file");
+            bool commandUsed = _startedCommand != null &&
+                               string.Equals(txtOriginalCommand.Text.Trim(), _startedCommand, StringComparison.Ordinal);
+            btnRun.Enabled = !_preparingJob && (_queueRunning || !_downloadRunning) && !commandUsed;
+            mnuValidateVideoFile.Enabled = !_downloadRunning;
+            mnuExtractSubtitleFile.Enabled = !_downloadRunning;
+        }
+
+        /// <summary>The Job box: "2/5" means the second of five downloads is running.</summary>
+        private void UpdateJobBox()
+        {
+            txtJob.Text = _queueRunning ? $"{_jobsStartedInRun}/{_jobsStartedInRun + _queue.WaitingCount}" : "";
+        }
+
+        private static string Downloads(int count) => count == 1 ? "1 download" : $"{count} downloads";
+
+        /// <summary>
+        /// Tools > Download Queue, or a click in the Job box: the queue window, which stays open next to
+        /// the main window and follows the queue.
+        /// </summary>
+        private void ShowQueueWindow()
+        {
+            if (_queueForm == null || _queueForm.IsDisposed)
+            {
+                _queueForm = new QueueForm(_queue);
+                _queueForm.Show(this);
+            }
+            else
+            {
+                if (_queueForm.WindowState == FormWindowState.Minimized)
+                    _queueForm.WindowState = FormWindowState.Normal;
+                _queueForm.Activate();
+            }
+        }
+
+        private void menuDownloadQueue_Click(object? sender, EventArgs e) => ShowQueueWindow();
+
+        private void txtJob_Click(object? sender, EventArgs e) => ShowQueueWindow();
+
+        /// <summary>
+        /// At startup: downloads left in the queue file mean the app was closed during a queue, or a
+        /// download was interrupted (power outage, crash). Asks whether to start them again.
+        /// </summary>
+        private async Task ResumeSavedQueueAsync()
+        {
+            if (!DownloadQueue.HasSavedFile()) return;
+            if (!_queue.TryTakeOwnership()) return; // another window is using the queue
+            var pending = _queue.Entries.Where(e => e.IsPending).ToList();
+            if (pending.Count == 0)
+            {
+                _queue.ReleaseOwnershipIfIdle();
+                return;
+            }
+
+            var interrupted = pending.FirstOrDefault(e => e.WasInterrupted);
+            int others = pending.Count - (interrupted != null ? 1 : 0);
+            string message = interrupted != null
+                ? $"The download of \"{interrupted.Job.FileName}\" was interrupted, for example by a power outage." +
+                  (others > 0 ? $"\n\n{Downloads(others)} {(others == 1 ? "is" : "are")} also waiting in the queue." : "")
+                : $"{Downloads(others)} {(others == 1 ? "is" : "are")} waiting in the queue from the last time.";
+            message += pending.Count == 1
+                ? "\n\nDo you want to start it again now?\n\n" +
+                  "Yes: start the download again (from the beginning).\n" +
+                  "No: remove it from the queue."
+                : "\n\nDo you want to start them again now?\n\n" +
+                  "Yes: start the downloads again (an interrupted download starts from the beginning).\n" +
+                  "No: remove them from the queue.";
+
+            TaskbarFlash.FlashIfInactive(this);
+            var answer = MessageBox.Show(message, AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (answer != DialogResult.Yes)
+            {
+                _queue.RemoveWaiting();
+                _queue.ReleaseOwnershipIfIdle();
+                return;
+            }
+            await RunQueueAsync(); // the interrupted download first: it is the first in the queue
+        }
+
+        /// <summary>
+        /// Checks the fields for a new download and asks the questions it needs (create a missing
+        /// folder, overwrite an existing file), so that running the job asks nothing up front.
+        /// Returns null when the download can't or shouldn't start (the reason has been shown).
+        /// </summary>
+        private async Task<DownloadJob?> PrepareDownloadJobAsync()
+        {
+            // While downloading (Add to Queue), Status shows the running download: leave it alone
+            if (!_queueRunning)
+                ClearStatus();
 
             string originalCommand = txtOriginalCommand.Text.Trim();
             string folder = cboFolder.Text.Trim();
@@ -805,7 +1093,7 @@ namespace FFmpegAssistant
             if (string.IsNullOrEmpty(originalCommand) || string.IsNullOrEmpty(folder))
             {
                 MessageBox.Show("Please enter the command and the folder.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return null;
             }
 
             if (IsValidationCommandShown(originalCommand))
@@ -814,21 +1102,18 @@ namespace FFmpegAssistant
                                 "Paste a download command to start a download.",
                     AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 txtOriginalCommand.Focus();
-                return;
+                return null;
             }
 
             // Pre-fetch the M3U8 playlist (if applicable) to detect content type and segment count.
             // This runs before filename determination so we can suggest the right default extension.
             var m3u8Info = await TryGetM3u8InfoAsync(originalCommand);
-            _m3u8ContentType = m3u8Info.Type;
-            _totalM3u8Segments = m3u8Info.SegmentCount;
-            _m3u8SegmentsOpened = 0;
 
             // The file name may already be non-empty here — e.g. auto-suggested from the Title/TV
             // Show workflow before we had any way to know this was actually a subtitle stream. Now
             // that the playlist confirms it, force the extension to .srt regardless of what was
             // guessed before (a folder/episode-continuation guess has no idea this is a subtitle).
-            if (_m3u8ContentType == M3u8ContentType.Subtitle && !string.IsNullOrEmpty(fileName) &&
+            if (m3u8Info.Type == M3u8ContentType.Subtitle && !string.IsNullOrEmpty(fileName) &&
                 !fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 fileName = Path.ChangeExtension(fileName, ".srt");
@@ -846,7 +1131,7 @@ namespace FFmpegAssistant
                         IsLocalM3u8Path(rawArg))
                     {
                         // No explicit output filename — use M3U8 content type to pick a sensible default
-                        fileName = _m3u8ContentType == M3u8ContentType.Subtitle ? "subtitles.srt" : "output.mp4";
+                        fileName = m3u8Info.Type == M3u8ContentType.Subtitle ? "subtitles.srt" : "output.mp4";
                     }
                     else
                         fileName = Path.GetFileName(rawArg);
@@ -856,7 +1141,7 @@ namespace FFmpegAssistant
                 if (string.IsNullOrEmpty(fileName))
                 {
                     MessageBox.Show("Could not determine a file name from the original command.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    return null;
                 }
             }
 
@@ -877,20 +1162,20 @@ namespace FFmpegAssistant
             {
                 MessageBox.Show(folderError, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 cboFolder.Focus();
-                return;
+                return null;
             }
             if (GetInvalidPathCharError(fileName) is string nameError)
             {
                 MessageBox.Show(nameError, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtFileName.Focus();
-                return;
+                return null;
             }
 
             // FFmpeg can't create folders: create a missing one here (asking first, unless the app suggested it)
             if (!EnsureFolderExists(folder, askFirst: !_suggestedFolders.Contains(Path.TrimEndingDirectorySeparator(folder))))
             {
                 cboFolder.Focus();
-                return;
+                return null;
             }
 
             // Save TV show history so the folder is auto-suggested next time
@@ -905,23 +1190,25 @@ namespace FFmpegAssistant
                     TvShowHistory.SaveOrUpdate(showName, subfolder);
             }
 
-            string outputPath = Path.Combine(folder, fileName);
-
-            bool isSrt = fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
-
             // In watch-while-downloading mode, download to a .ts file first.
             // In normal mode, download to a "(part)" file to protect against power outages —
             // the file is renamed to the final name only after successful validation.
             // SRT files use the same (part) protection but skip watch mode and video validation.
-            bool watchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt;
-            _runInWatchMode = watchMode;
-            string partPath = Path.Combine(folder,
-                Path.GetFileNameWithoutExtension(fileName) + " (part)" + Path.GetExtension(fileName));
-            string downloadPath = watchMode
-                ? Path.ChangeExtension(outputPath, ".ts")
-                : partPath;
+            // (See DownloadJob.PartPath and DownloadPath.)
+            bool isSrt = fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
+            var job = new DownloadJob
+            {
+                Command = originalCommand, // replaced below, once DownloadPath is known
+                OriginalCommand = originalCommand,
+                Folder = folder,
+                FileName = fileName,
+                WatchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt,
+                M3u8SegmentCount = m3u8Info.SegmentCount,
+                M3u8Type = m3u8Info.Type
+            };
+            string outputPath = job.OutputPath;
 
-            string command = ReplaceOutputFile(originalCommand, downloadPath);
+            string command = ReplaceOutputFile(originalCommand, job.DownloadPath);
 
             // When the input is a local M3U8 file, FFmpeg restricts allowed protocols to
             // file,crypto,data — blocking https:// segment URLs inside the playlist.
@@ -935,6 +1222,16 @@ namespace FFmpegAssistant
                 command = command[..localM3u8InputMatch.Index] + whitelist + command[localM3u8InputMatch.Index..];
             }
 
+            // The same file twice in the queue: the second download would overwrite the first
+            if (_queue.Entries.Any(q => q.IsPending && IsSamePath(q.Job.OutputPath, outputPath)))
+            {
+                MessageBox.Show($"The file \"{fileName}\" is already in the download queue.\n\n" +
+                                "Change the file name to download it again.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtFileName.Focus();
+                return null;
+            }
+
             // Overwrite protection — always check the final output file
             if (File.Exists(outputPath))
             {
@@ -944,14 +1241,44 @@ namespace FFmpegAssistant
 
                 if (answer != DialogResult.Yes)
                 {
-                    SetStatus("Download cancelled — file already exists.");
-                    return;
+                    if (!_queueRunning)
+                        SetStatus("Download cancelled — file already exists.");
+                    return null;
                 }
                 // Normal mode downloads to partPath so no -y needed for the final file.
                 // Watch mode: -y is added to the conversion step instead.
             }
 
-            // If a leftover download file exists from a previous interrupted run, overwrite it
+            return job with { Command = command };
+        }
+
+        /// <summary>
+        /// Runs a prepared download: the attempts, the watch-mode conversion, the validation and
+        /// the rename of the "(part)" file. Uses only <paramref name="job"/>, not the fields, except
+        /// two checkboxes that are read at the end on purpose because they may be changed during the
+        /// download: Save Subtitles as Separate Files and Enable Watching While Downloading (the
+        /// finished notification, see <see cref="NotifyDownloadFinished"/>).
+        /// </summary>
+        private async Task<(QueueStatus Outcome, string? Reason)> RunDownloadJobAsync(DownloadJob job)
+        {
+            // The result for the queue; each way the last attempt ends sets it
+            QueueStatus outcome = QueueStatus.Failed;
+            string? reason = null;
+
+            string fileName = job.FileName;
+            string outputPath = job.OutputPath;
+            string partPath = job.PartPath;
+            string downloadPath = job.DownloadPath;
+            bool isSrt = job.IsSrt;
+            bool watchMode = job.WatchMode;
+            _runInWatchMode = watchMode;
+            _m3u8ContentType = job.M3u8Type;
+            _totalM3u8Segments = job.M3u8SegmentCount;
+            _m3u8SegmentsOpened = 0;
+
+            // If a leftover download file exists from a previous interrupted run, overwrite it.
+            // Checked here, not when preparing: a queued job may start much later.
+            string command = job.Command;
             if (File.Exists(downloadPath))
                 command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
 
@@ -986,9 +1313,7 @@ namespace FFmpegAssistant
                 ResetProgress();
                 _cts = new CancellationTokenSource();
                 _lastLogFile = logFile;
-                btnRun.Enabled = false;
                 btnCancel.Enabled = true;
-                btnClear.Enabled = false;
                 btnOpenFile.Enabled = false;
                 btnOpenLogFile.Enabled = false;
 
@@ -1031,8 +1356,13 @@ namespace FFmpegAssistant
                         else
                         {
                             SetStatus("Download failed — an error occurred.", StatusLevel.Error);
-                            TaskbarFlash.FlashIfInactive(this);
-                            MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            outcome = QueueStatus.Failed;
+                            reason = $"FFmpeg exited with an error (code {exitCode})";
+                            if (!IsQueueRun) // in a queue the report at the end lists it
+                            {
+                                TaskbarFlash.FlashIfInactive(this);
+                                MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
                             LogError(fileName, message, logFile);
                         }
                     }
@@ -1063,7 +1393,7 @@ namespace FFmpegAssistant
                                 WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
                                 SetStatus("Conversion failed — .ts file kept.", StatusLevel.Error);
                                 TaskbarFlash.FlashIfInactive(this);
-                                return;
+                                return (QueueStatus.Failed, $"the conversion to {finalExt} failed (the .ts file was kept)");
                             }
                         }
 
@@ -1076,6 +1406,13 @@ namespace FFmpegAssistant
                                 progressBar.Value = 0;
                                 lblEstimatedRemaining.Text = "Estimated remaining time: —";
                                 LogError(fileName, "Output file is empty — download may have failed", logFile);
+                                outcome = QueueStatus.Failed;
+                                reason = "the file is empty (0 bytes)";
+                                if (IsQueueRun)
+                                {
+                                    SetStatus("Download failed — the file is empty.", StatusLevel.Error);
+                                    continue;
+                                }
                                 TaskbarFlash.FlashIfInactive(this);
                                 MessageBox.Show(
                                     $"The output file is empty (0 bytes):\n\n{partPath}\n\n" +
@@ -1096,7 +1433,7 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
                             SetStatus("Done", StatusLevel.Success);
-                            NotifyDownloadFinished(watchMode);
+                            outcome = QueueStatus.Done; // RunQueueAsync notifies, after the last download
                             continue;
                         }
 
@@ -1133,6 +1470,9 @@ namespace FFmpegAssistant
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
 
+                            // The video is fine even if saving the subtitles fails below
+                            outcome = QueueStatus.Done;
+
                             // Read the checkbox now, not at the start: it can be changed during the download
                             string doneStatus = "Done";
                             if (chkSaveSubtitlesAsSeparateFiles.Checked)
@@ -1142,8 +1482,7 @@ namespace FFmpegAssistant
                                 doneStatus = subtitleResult;
                             }
 
-                            SetStatus(doneStatus, StatusLevel.Success);
-                            NotifyDownloadFinished(watchMode);
+                            SetStatus(doneStatus, StatusLevel.Success); // RunQueueAsync notifies, after the last download
                         }
                         else
                         {
@@ -1158,9 +1497,19 @@ namespace FFmpegAssistant
                                 SetStatus($"File corrupted — retrying (attempt {attempt + 1} of {maxAttempts})...", StatusLevel.Warning);
                                 keepTrying = true;
                             }
+                            else if (IsQueueRun)
+                            {
+                                // Nobody may be at the PC: keep the file, go on with the queue, the report lists it
+                                LogError(fileName, "File validation failed — corrupted download", logFile);
+                                outcome = QueueStatus.Failed;
+                                reason = "the downloaded file appears to be corrupted";
+                                SetStatus("Downloaded file corrupted.", StatusLevel.Error);
+                            }
                             else
                             {
                                 LogError(fileName, "File validation failed — corrupted download", logFile);
+                                outcome = QueueStatus.Failed;
+                                reason = "the downloaded file appears to be corrupted";
 
                                 TaskbarFlash.FlashIfInactive(this);
                                 var deleteAnswer = MessageBox.Show(
@@ -1207,6 +1556,7 @@ namespace FFmpegAssistant
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     TaskbarProgress.Clear(this);
                     WriteAppLog($"RESULT   : CANCELLED by user");
+                    outcome = QueueStatus.Cancelled;
 
                     if (_closeAfterCancel)
                     {
@@ -1265,6 +1615,8 @@ namespace FFmpegAssistant
                     lblEstimatedRemaining.Text = "Estimated remaining time: —";
                     TaskbarProgress.SetError(this, 100, 100);
                     WriteAppLog($"RESULT   : FFMPEG NOT FOUND — {win32ex.Message}");
+                    outcome = QueueStatus.Failed;
+                    reason = "FFmpeg was not found";
 
                     TaskbarFlash.FlashIfInactive(this);
                     var answer = MessageBox.Show(
@@ -1306,8 +1658,13 @@ namespace FFmpegAssistant
                     TaskbarProgress.SetError(this, 100, 100);
                     SetStatus($"Error: {ex.Message}", StatusLevel.Error);
                     WriteAppLog($"RESULT   : EXCEPTION — {ex.Message}");
-                    TaskbarFlash.FlashIfInactive(this);
-                    MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    outcome = QueueStatus.Failed;
+                    reason = ex.Message;
+                    if (!IsQueueRun)
+                    {
+                        TaskbarFlash.FlashIfInactive(this);
+                        MessageBox.Show(message, AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                     LogError(fileName, message, logFile);
                 }
                 finally
@@ -1316,19 +1673,13 @@ namespace FFmpegAssistant
                     _cts = null;
                     if (!keepTrying)
                     {
-                        btnRun.Enabled = true;
                         btnCancel.Enabled = false;
                         btnClear.Enabled = true;
                     }
-
-                    // If the user closed the window during a download, finish closing now
-                    if (_closeAfterCancel && !keepTrying)
-                    {
-                        _closeAfterCancel = false;
-                        Close();
-                    }
+                    // If the user closed the window during a download, RunQueueAsync closes it now
                 }
             }
+            return (outcome, reason);
         }
 
         /// <summary>
@@ -1419,6 +1770,20 @@ namespace FFmpegAssistant
 
         private void btnCancel_Click(object sender, EventArgs e)
         {
+            // With downloads waiting in the queue: this download only, or the whole queue?
+            int waiting = _queueRunning ? _queue.WaitingCount : 0;
+            if (waiting > 0)
+            {
+                var answer = MessageBox.Show(
+                    "Do you want to cancel all the downloads in the queue?\n\n" +
+                    $"Yes: cancel this download and remove the {Downloads(waiting)} waiting in the queue.\n" +
+                    "No: cancel only this download and continue with the next one.\n" +
+                    "Cancel: continue downloading.",
+                    AppTitle, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+                if (answer == DialogResult.Cancel) return;
+                _cancelQueue = answer == DialogResult.Yes;
+            }
+
             _cts?.Cancel();
             btnCancel.Enabled = false;
             btnClear.Enabled = true;
@@ -1451,12 +1816,17 @@ namespace FFmpegAssistant
             rdoMovie.Checked = false;
             rdoTvShow.Checked = false;
 
-            ResetProgress();
+            // During a download Clear only empties the fields, to prepare the next download (Add to Queue):
+            // the progress and Open File / Open Log File belong to the running download
+            if (!_downloadRunning)
+            {
+                ResetProgress();
 
-            _lastOutputPath = null;
-            _lastLogFile = null;
-            btnOpenFile.Enabled = false;
-            btnOpenLogFile.Enabled = false;
+                _lastOutputPath = null;
+                _lastLogFile = null;
+                btnOpenFile.Enabled = false;
+                btnOpenLogFile.Enabled = false;
+            }
 
             lblSeason.Visible = false;
             txtSeason.Visible = false;
@@ -1601,6 +1971,7 @@ namespace FFmpegAssistant
 #if DEBUG
             _statusColorDemoCts?.Cancel();
 #endif
+            UpdateRunButton();
             ResetProgress();
             _totalM3u8Segments = 0;
             _progressStarted = true; // skip the "Fetching stream information..." / "Downloading..." texts
@@ -1610,12 +1981,10 @@ namespace FFmpegAssistant
             _cts = new CancellationTokenSource();
             _lastOutputPath = filePath; // Open File opens the validated file
             _lastLogFile = logFile;
-            btnRun.Enabled = false;
             btnClear.Enabled = false;
             btnCancel.Enabled = true;
             btnOpenFile.Enabled = true;
             btnOpenLogFile.Enabled = true;
-            mnuValidateVideoFile.Enabled = false;
             txtAttempt.Text = "";
 
             SetStatus("Validating video file...", StatusLevel.InProgress);
@@ -1677,10 +2046,9 @@ namespace FFmpegAssistant
                 _downloadRunning = false;
                 if (!IsDisposed)
                 {
-                    btnRun.Enabled = true;
+                    UpdateRunButton();
                     btnClear.Enabled = true;
                     btnCancel.Enabled = false;
-                    mnuValidateVideoFile.Enabled = true;
                 }
                 // If the user closed the window during the validation, finish closing now
                 if (_closeAfterCancel)
@@ -2329,25 +2697,93 @@ namespace FFmpegAssistant
                 txtFileName.Clear();
         }
 
+        /// <summary>True if two file or folder paths point to the same place (case-insensitive, as on Windows).</summary>
+        private static bool IsSamePath(string a, string b)
+        {
+            try
+            {
+                return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)),
+                                     Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); // e.g. an unfinished typed path
+            }
+        }
+
+        /// <summary>
+        /// True if another program (e.g. FFmpeg in another window) has the file open for writing:
+        /// then Windows doesn't let us open it while denying others write access (sharing violation).
+        /// Tested with FFmpeg: a file it downloads to is "in use", a leftover from a crash is not.
+        /// </summary>
+        private static bool IsFileBeingWritten(string path)
+        {
+            const int ERROR_SHARING_VIOLATION = unchecked((int)0x80070020);
+            const int ERROR_LOCK_VIOLATION = unchecked((int)0x80070021);
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return false;
+            }
+            catch (IOException ex) when (ex.HResult is ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION)
+            {
+                return true;
+            }
+            catch (Exception)
+            {
+                return false; // e.g. deleted in the meantime, or no access: not a running download
+            }
+        }
+
         private void SuggestNextEpisode(string folder)
         {
             if (_commandSetByExtractFeature) return;
             if (IsValidationCommandShown(txtOriginalCommand.Text.Trim())) return; // Folder/File Name show the validated file
-            if (!Directory.Exists(folder))
-            {
-                SyncShowNameToFolder(folder);
-                return;
-            }
 
             // Only scan files whose extension matches the command's output extension so that
             // e.g. extracting s01e01.srt from a folder of .mp4 files finds no .srt episodes
             // and exits without touching the filename the extract feature already set.
             string commandExt = GetCommandOutputExtension(txtOriginalCommand.Text.Trim());
 
-            var matches = Directory.GetFiles(folder)
+            // The episodes already in the folder, and the ones running or waiting in the download queue
+            // (a running download is still a "(part)" or .ts file, which EpisodePattern doesn't match),
+            // so the next episode is suggested, not one that is already being downloaded
+            var fileNames = _queue.Entries
+                .Where(q => (q.IsPending || q.Status == QueueStatus.Failed) && IsSamePath(q.Job.Folder, folder))
+                .Select(q => q.Job.FileName)
+                .ToList();
+            if (Directory.Exists(folder))
+            {
+                foreach (string path in Directory.GetFiles(folder))
+                {
+                    string name = Path.GetFileName(path);
+                    string nameOnly = Path.GetFileNameWithoutExtension(path);
+                    // A download running in another window: its "(part)" file (or the .ts file with Enable
+                    // Watching While Downloading) counts as that episode. Only while FFmpeg writes to it:
+                    // a leftover from a crash is free, and that episode still needs to be downloaded.
+                    bool isPart = nameOnly.EndsWith(" (part)", StringComparison.OrdinalIgnoreCase);
+                    bool isWatchTs = Path.GetExtension(path).Equals(".ts", StringComparison.OrdinalIgnoreCase) &&
+                                     !string.IsNullOrEmpty(commandExt) &&
+                                     !commandExt.Equals(".ts", StringComparison.OrdinalIgnoreCase);
+                    if (isPart || isWatchTs)
+                    {
+                        if (!IsFileBeingWritten(path)) continue;
+                        if (isPart) nameOnly = nameOnly[..^" (part)".Length];
+                        name = nameOnly + (isWatchTs ? commandExt : Path.GetExtension(path));
+                    }
+                    fileNames.Add(name);
+                }
+            }
+            else if (fileNames.Count == 0)
+            {
+                SyncShowNameToFolder(folder);
+                return;
+            }
+
+            var matches = fileNames
                 .Where(f => string.IsNullOrEmpty(commandExt) ||
                             Path.GetExtension(f).Equals(commandExt, StringComparison.OrdinalIgnoreCase))
-                .Select(f => EpisodePattern.Match(Path.GetFileName(f)))
+                .Select(f => EpisodePattern.Match(f))
                 .Where(m => m.Success)
                 .OrderBy(m => int.Parse(m.Groups[2].Value))
                 .ThenBy(m => int.Parse(m.Groups[3].Value))
@@ -2515,7 +2951,7 @@ namespace FFmpegAssistant
             if (!_settingCategoryFromAutoDetect)
             {
                 string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
-                if (!string.IsNullOrEmpty(showName))
+                if (!string.IsNullOrEmpty(showName) && !SetTitleFromTvShowHistory(showName))
                     txtTitle.Text = showName;
 
                 TryAutoDetectCategoryAndYearFromTitle();
@@ -2525,6 +2961,24 @@ namespace FFmpegAssistant
 
             if (!_settingCategoryFromAutoDetect)
                 btnRun.Focus();
+        }
+
+        /// <summary>
+        /// The command's show name can differ from the real one (e.g. "Gränslandet" for
+        /// "Robinson Gränslandet"). TvShowHistory remembers the folder the user downloaded the show
+        /// to last time: if there is one, fills in Title and Year from that folder name
+        /// ("My Show (2024)" gives Title "My Show" and Year 2024, so the folder comes out the same).
+        /// Returns false if the show isn't in the history.
+        /// </summary>
+        private bool SetTitleFromTvShowHistory(string showName)
+        {
+            string? subfolder = TvShowHistory.LookupFolder(showName);
+            if (subfolder == null) return false;
+
+            var m = Regex.Match(subfolder, @"^(.*) \((\d{4})\)$"); // same format as FindTitleFolderMatches
+            txtTitle.Text = m.Success ? m.Groups[1].Value : subfolder;
+            txtYear.Text = m.Success ? m.Groups[2].Value : "";
+            return true;
         }
 
         /// <summary>
@@ -2749,6 +3203,12 @@ namespace FFmpegAssistant
                         ? "A video file is being validated.\n\n" +
                           "If you close the application now, the validation is cancelled (the video file is not changed).\n\n" +
                           "Close anyway?"
+                        : _queueRunning && _queue.WaitingCount > 0
+                        ? "A download is in progress.\n\n" +
+                          "If you close the application now, the partial file will be deleted. The download stays in the " +
+                          $"queue, with the {Downloads(_queue.WaitingCount)} waiting, and you can start them again " +
+                          "the next time you open FFmpeg Assistant.\n\n" +
+                          "Close anyway?"
                         : "A download is in progress.\n\n" +
                           "If you close the application now, the partial file will be deleted.\n\n" +
                           "Close anyway?",
@@ -2769,6 +3229,12 @@ namespace FFmpegAssistant
             }
 
             base.OnFormClosing(e);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _queue.Dispose(); // lets another window use the queue
+            base.OnFormClosed(e);
         }
 
         // -------------------------------------------------------------------------
@@ -2802,7 +3268,11 @@ namespace FFmpegAssistant
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        private void TryApplyTvShowHistory(string command)
+        /// <param name="setTitle">
+        /// Also fill in Title and Year from the remembered folder: when a command is pasted, not when
+        /// the Command box is only left (that would undo a Title the user changed since).
+        /// </param>
+        private void TryApplyTvShowHistory(string command, bool setTitle)
         {
             if (string.IsNullOrWhiteSpace(command)) return;
             if (!rdoTvShow.Checked) return;
@@ -2814,6 +3284,9 @@ namespace FFmpegAssistant
             var (subfolder, _) = TvShowHistory.LookupFolderWithDiagnostics(showName);
             //WriteAppLog($"HISTORY  : {diagnostics}");
             if (subfolder == null) return;
+
+            if (setTitle)
+                SetTitleFromTvShowHistory(showName);
 
             string baseTvFolder = cboFolder.Items[2]?.ToString() ?? string.Empty;
             string showFolder = Path.Combine(baseTvFolder, subfolder);

@@ -53,6 +53,7 @@ Separate Files</a></li>
 </ul></li>
 <li><a href="#what-happens-during-a-download">What Happens During a
 Download</a></li>
+<li><a href="#download-queue">Download Queue</a></li>
 <li><a href="#validate-video-file">Validate Video File</a></li>
 <li><a href="#extract-subtitle-file">Extract Subtitle File</a></li>
 <li><a href="#settings">Settings</a></li>
@@ -171,8 +172,12 @@ Use the year shown on IMDb or The Movie Database, even for an episode
 from a later season. This way Plex, Jellyfin and Kodi can tell the show
 apart from others with the same name, for example a remake.</li>
 <li>FFmpeg Assistant looks at the episodes that are already in the
-folder and suggests the next one. If <code>s01e05</code> is the last
-one, the new file becomes <code>s01e06</code>.</li>
+folder, and the ones that are being downloaded (also in another FFmpeg
+Assistant window) or are waiting in the <a href="#download-queue">Download Queue</a>, and suggests the next one. If
+<code>s01e05</code> is the last one, the new file becomes
+<code>s01e06</code>. A <code>(part)</code> file left over from an
+interrupted download doesn’t count: that episode still needs to be
+downloaded.</li>
 <li><strong>Season</strong> and <strong>Episode</strong> show the
 suggested numbers. Change them to download another episode. They are
 only shown for TV shows.</li>
@@ -187,8 +192,15 @@ looks for a folder with that title in <strong>Movies</strong> and
 <strong>Year</strong> for you.</li>
 <li>FFmpeg Assistant remembers which folder under <strong>TV
 Shows</strong> you downloaded each show to. The next time you paste a
-command for the same show while <strong>TV Show</strong> is chosen, that
-folder is chosen automatically, and the next episode is suggested.</li>
+command for the same show while <strong>TV Show</strong> is chosen, or
+choose <strong>TV Show</strong> after pasting it, that folder is chosen
+automatically, and the next episode is suggested. <strong>Title</strong>
+and <strong>Year</strong> are filled in from the folder name. This is
+useful when the command has the wrong name for the show: if it says
+<code>Gränslandet</code> and you changed <strong>Title</strong> to
+<code>Robinson Gränslandet</code> before you downloaded the first
+episode, the next episodes get <code>Robinson Gränslandet</code>
+automatically.</li>
 </ul>
 <h3 id="enable-watching-while-downloading">Enable Watching While
 Downloading</h3>
@@ -235,11 +247,19 @@ Assistant shows what went wrong. The downloaded video is not
 affected.</p>
 <h3 id="downloading">Downloading</h3>
 <ul>
-<li><strong>Download</strong> starts the download.</li>
+<li><strong>Download</strong> starts the download. During a download the
+button is called <strong>Add to Queue</strong>: it adds the next
+download to the <a href="#download-queue">Download Queue</a>. Once a
+command is downloading or in the queue, the button is disabled until you
+change the <strong>Command</strong>, so the same video isn’t downloaded
+twice by mistake. If the download fails, the button is enabled again, so
+you can try again.</li>
 <li><strong>Cancel</strong> stops the download. If a partial file was
-saved, you are asked whether to delete it.</li>
-<li><strong>Clear</strong> empties all the boxes, so you can start
-over.</li>
+saved, you are asked whether to delete it. If more downloads are waiting
+in the queue, you are first asked whether to cancel them too.</li>
+<li><strong>Clear</strong> empties all the boxes, so you can start over.
+During a download it only empties the boxes: the progress of the running
+download stays.</li>
 <li><strong>Open File</strong> opens the downloaded file in your default
 video player.</li>
 <li><strong>Open Folder</strong> opens the folder in File Explorer, with
@@ -249,7 +269,10 @@ of the running download.</li>
 download. Useful when something went wrong.</li>
 </ul>
 <p>You can change the boxes during a download to prepare the next one.
-They are not used until you click <strong>Download</strong> again.</p>
+They are not used until you click <strong>Add to Queue</strong>.
+<strong>Tools &gt; Validate Video File…</strong> and <strong>Subtitles
+&gt; Extract Subtitle File…</strong> are not available during a
+download, because they fill in the boxes themselves.</p>
 <h3 id="progress-and-status">Progress and Status</h3>
 <p>The table shows what FFmpeg reports during the download:</p>
 <table>
@@ -310,6 +333,8 @@ again,</li>
 <li><strong>red</strong>: something went wrong,</li>
 <li><strong>green</strong>: done.</li>
 </ul>
+<p><strong>Job</strong> shows which download of the queue is running:
+<code>2/5</code> means the second of five. Click it to open the <a href="#download-queue">Download Queue</a> window.</p>
 <p><strong>Attempt</strong> shows which try the download is on (see <a href="#auto-retry-on-download-failure">Auto-Retry on Download
 Failure</a>).</p>
 <p>If the window is small, the table shows its rows in two columns side
@@ -348,7 +373,69 @@ can still turn off.</li>
 is finished or has failed while you are working in another window.</li>
 <li>If you close FFmpeg Assistant during a download, you are asked
 first, and the partial file is deleted.</li>
+<li>If the power goes out or the PC crashes during a download, FFmpeg
+Assistant asks the next time it starts whether to start the download
+again (see <a href="#download-queue">Download Queue</a>).</li>
 </ul>
+<h2 id="download-queue">Download Queue</h2>
+<p>You don’t have to wait until a download is finished to start the next
+one. During a download, fill in the next command, folder and file name,
+and click <strong>Add to Queue</strong>. The download waits in the queue
+and starts when the downloads before it are finished. Add as many as you
+like: for example all the episodes of a season. For TV shows, the next
+episode number is suggested each time, counting the episodes in the
+queue.</p>
+<p>FFmpeg Assistant checks each download when you add it, so the
+questions come while you are at the PC: whether to create a missing
+folder, and whether to overwrite a file that already exists. The same
+file can’t be in the queue twice.</p>
+<p><strong>Job</strong>, at the right of <strong>Status</strong> and
+<strong>Attempt</strong>, shows which download is running, for example
+<code>2/5</code>. Click it, or choose <strong>Tools &gt; Download
+Queue</strong>, to see the queue in its own window. It shows the
+<strong>Status</strong>, <strong>File Name</strong>,
+<strong>Folder</strong> and <strong>Command</strong> of each download,
+and follows the queue while it runs. Select one or more downloads and
+click <strong>Remove</strong> (or press <strong>Delete</strong>) to take
+them out of the queue. The running download can’t be removed: click
+<strong>Cancel</strong> in the main window instead.</p>
+<p><strong>Cancel</strong> asks what to cancel when more downloads are
+waiting:</p>
+<ul>
+<li><strong>Yes</strong>: cancel this download and remove the waiting
+ones from the queue.</li>
+<li><strong>No</strong>: cancel only this download and continue with the
+next one.</li>
+<li><strong>Cancel</strong>: continue downloading.</li>
+</ul>
+<p>When a download in the queue fails, FFmpeg Assistant doesn’t stop to
+show a message (you may be away from the PC). It goes on with the next
+download. When the queue is finished, a message lists the downloads that
+failed, and why. A damaged file is kept, so you can check it. Links from
+the web often stop working after a few hours, so a download far back in
+a long queue may fail for that reason. Copy a new command from
+Privatkopiera and add it again.</p>
+<p>The <a href="#action-when-download-finished">Action When Download
+Finished</a> (for example the sound) happens once, when the whole queue
+is finished.</p>
+<p><strong>Enable Watching While Downloading</strong> is read when each
+download starts, and <strong>Save Subtitles as Separate Files</strong>
+when each download is finished, so they apply to all the downloads in
+the queue from then on.</p>
+<h3 id="after-a-power-outage">After a Power Outage</h3>
+<p>The queue is saved on the disk after every change. If the power goes
+out or the PC crashes during a download, FFmpeg Assistant asks the next
+time it starts whether to start the download again. It starts from the
+beginning, followed by the ones that were waiting. Click
+<strong>No</strong> to remove them from the queue.</p>
+<p>If you close FFmpeg Assistant while downloads are waiting, they are
+kept in the queue, and you are asked the same question the next time it
+starts.</p>
+<h3 id="more-than-one-window">More Than One Window</h3>
+<p>You can open FFmpeg Assistant more than once, but only one window at
+a time can use the queue. In another window you can still download one
+file at a time, but not add to the queue, and that download is not saved
+in case of a power outage.</p>
 <h2 id="validate-video-file">Validate Video File</h2>
 <p><strong>Tools &gt; Validate Video File…</strong> checks any video
 file on your computer with the same check that runs after a download.
@@ -397,7 +484,8 @@ default is 5. Leave it empty, or enter 0 or 1, to not try again.</p>
 <h3 id="action-when-download-finished">Action When Download
 Finished</h3>
 <p><strong>Action</strong> decides what happens when a download is
-finished:</p>
+finished. For the <a href="#download-queue">Download Queue</a>, it
+happens once, when the whole queue is finished:</p>
 <ul>
 <li><strong>Play a Sound</strong>: plays the sound chosen under
 <strong>Sound</strong>. Click <strong>▶</strong> to listen to it. Choose
@@ -405,7 +493,7 @@ finished:</p>
 own WAV file, and select it under <strong>Custom Sound
 File</strong>.</li>
 <li><strong>Message Box</strong>: shows the message “The download is
-complete.”</li>
+complete.” (or “All 5 downloads are complete.” after a queue).</li>
 <li><strong>None</strong>: does nothing. Status still shows “Done”.</li>
 </ul>
 <h3 id="check-for-new-version">Check for New Version</h3>
@@ -454,7 +542,7 @@ address. It is put into the <strong>Command</strong> box:</p>
 </tr>
 <tr>
 <td><strong>Ctrl+E</strong></td>
-<td>Download</td>
+<td>Download, or Add to Queue during a download</td>
 </tr>
 <tr>
 <td><strong>Ctrl+O</strong></td>
@@ -490,6 +578,8 @@ report of each <a href="#validate-video-file">Validate Video File</a>
 check.</li>
 <li><code>Logs\errors.log</code>: a list of the downloads that
 failed.</li>
+<li><code>Queue.json</code>: the downloads that are waiting in the <a href="#download-queue">Download Queue</a>. It is deleted when the queue
+is empty.</li>
 </ul>
 <p>To open the folder, type
 <code>%AppData%\SweWolfSoftware\FFmpegAssist</code> in the address bar
@@ -525,6 +615,13 @@ it is in the same folder as <code>ffmpeg.exe</code>, or on the system
 PATH.</p>
 <p><strong>“No subtitle streams were found in the selected
 file.”</strong> The video file doesn’t contain any subtitles.</p>
+<p><strong>“Another FFmpeg Assistant window is downloading a
+queue.”</strong> Only one FFmpeg Assistant window can use the queue. Add
+the download in the window that is downloading, or wait until the
+download in this window has finished (see <a href="#more-than-one-window">More Than One Window</a>).</p>
+<p><strong>“The file … is already in the download queue.”</strong> A
+download with the same folder and file name is already waiting in the
+queue. Change the file name (for example the episode number).</p>
 <p><strong>The episode number is not suggested.</strong> FFmpeg
 Assistant only recognises episodes named like
 <code>My Show - s01e05.mp4</code>, with the same extension as the new
