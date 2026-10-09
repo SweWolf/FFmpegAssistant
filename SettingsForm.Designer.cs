@@ -57,7 +57,7 @@ namespace FFmpegAssistant
             grpFfmpeg.Controls.Add(txtFfmpegPath);
             grpFfmpeg.Controls.Add(btnBrowseFfmpeg);
             grpFfmpeg.Controls.Add(lblFfmpegHint);
-            grpFfmpeg.Location = new Point(15, 656);
+            grpFfmpeg.Location = new Point(10, 656);
             grpFfmpeg.Name = "grpFfmpeg";
             grpFfmpeg.Size = new Size(470, 105);
             grpFfmpeg.TabIndex = 5;
@@ -78,13 +78,13 @@ namespace FFmpegAssistant
             txtFfmpegPath.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             txtFfmpegPath.Location = new Point(10, 42);
             txtFfmpegPath.Name = "txtFfmpegPath";
-            txtFfmpegPath.Size = new Size(370, 23);
+            txtFfmpegPath.Size = new Size(345, 23);
             txtFfmpegPath.TabIndex = 1;
             // 
             // btnBrowseFfmpeg
             // 
             btnBrowseFfmpeg.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnBrowseFfmpeg.Location = new Point(388, 40);
+            btnBrowseFfmpeg.Location = new Point(373, 39);
             btnBrowseFfmpeg.Name = "btnBrowseFfmpeg";
             btnBrowseFfmpeg.Size = new Size(72, 27);
             btnBrowseFfmpeg.TabIndex = 2;
@@ -105,7 +105,7 @@ namespace FFmpegAssistant
             // btnOK
             // 
             btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnOK.Location = new Point(326, 778);
+            btnOK.Location = new Point(325, 778);
             btnOK.Name = "btnOK";
             btnOK.Size = new Size(75, 27);
             btnOK.TabIndex = 8;
@@ -117,7 +117,7 @@ namespace FFmpegAssistant
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(407, 778);
+            btnCancel.Location = new Point(406, 778);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(75, 27);
             btnCancel.TabIndex = 9;
@@ -130,9 +130,9 @@ namespace FFmpegAssistant
             groupBox2.Controls.Add(label3);
             groupBox2.Controls.Add(txtNumberOfDownloadAttempts);
             groupBox2.Controls.Add(label2);
-            groupBox2.Location = new Point(12, 235);
+            groupBox2.Location = new Point(10, 235);
             groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(472, 108);
+            groupBox2.Size = new Size(470, 108);
             groupBox2.TabIndex = 2;
             groupBox2.TabStop = false;
             groupBox2.Text = "Auto-Retry on Download Failure";
@@ -168,7 +168,7 @@ namespace FFmpegAssistant
             // 
             groupBox3.Controls.Add(cboNewVersionCheck);
             groupBox3.Controls.Add(label4);
-            groupBox3.Location = new Point(14, 573);
+            groupBox3.Location = new Point(10, 573);
             groupBox3.Name = "groupBox3";
             groupBox3.Size = new Size(470, 77);
             groupBox3.TabIndex = 4;
@@ -204,9 +204,9 @@ namespace FFmpegAssistant
             groupBox1.Controls.Add(lblFinishedDownlaodSound);
             groupBox1.Controls.Add(label1);
             groupBox1.Controls.Add(cboActionWhenDownloadFinished);
-            groupBox1.Location = new Point(14, 362);
+            groupBox1.Location = new Point(10, 362);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(472, 205);
+            groupBox1.Size = new Size(470, 205);
             groupBox1.TabIndex = 3;
             groupBox1.TabStop = false;
             groupBox1.Text = "Action When Download Finished";
@@ -325,7 +325,7 @@ namespace FFmpegAssistant
             groupBox4.Controls.Add(chkShowSaveSubtitlesAsSeparateFiles);
             groupBox4.Location = new Point(10, 167);
             groupBox4.Name = "groupBox4";
-            groupBox4.Size = new Size(465, 51);
+            groupBox4.Size = new Size(470, 51);
             groupBox4.TabIndex = 1;
             groupBox4.TabStop = false;
             groupBox4.Text = "Show";
@@ -346,7 +346,7 @@ namespace FFmpegAssistant
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(494, 817);
+            ClientSize = new Size(493, 817);
             ControlBox = false;
             Controls.Add(groupBox4);
             Controls.Add(grpExtraFolders);
