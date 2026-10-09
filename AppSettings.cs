@@ -284,6 +284,49 @@ namespace FFmpegAssistant
         }
 
         // -------------------------------------------------------------------------
+        // Show the "Save Subtitles as Separate Files" checkbox in the main window (default: No)
+        // -------------------------------------------------------------------------
+
+        private static readonly string ShowSaveSubtitlesFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "show-save-subtitles.txt");
+
+        private static bool? _cachedShowSaveSubtitles;
+
+        public static bool ShowSaveSubtitlesAsSeparateFiles
+        {
+            get
+            {
+                if (_cachedShowSaveSubtitles.HasValue) return _cachedShowSaveSubtitles.Value;
+                try
+                {
+                    if (File.Exists(ShowSaveSubtitlesFile))
+                    {
+                        string v = File.ReadAllText(ShowSaveSubtitlesFile, System.Text.Encoding.UTF8).Trim();
+                        if (v == "Yes" || v == "No")
+                        {
+                            _cachedShowSaveSubtitles = v == "Yes";
+                            return _cachedShowSaveSubtitles.Value;
+                        }
+                    }
+                }
+                catch { }
+                _cachedShowSaveSubtitles = false;
+                return false;
+            }
+            set
+            {
+                _cachedShowSaveSubtitles = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(ShowSaveSubtitlesFile)!);
+                    File.WriteAllText(ShowSaveSubtitlesFile, value ? "Yes" : "No", System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
+        // -------------------------------------------------------------------------
         // Extra folders in the main window's Folder list, one per line (default: none)
         // -------------------------------------------------------------------------
 

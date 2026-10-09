@@ -30,22 +30,25 @@ namespace FFmpegAssistant
             cboNewVersionCheck = new ComboBox();
             label4 = new Label();
             groupBox1 = new GroupBox();
+            btnBrowseForCustomSoundFile = new Button();
+            txtCustomActionSoundFile = new TextBox();
+            label5 = new Label();
             cmdPlayActionSound = new Button();
             cboFinishedDownlaodSound = new ComboBox();
             lblFinishedDownlaodSound = new Label();
             label1 = new Label();
             cboActionWhenDownloadFinished = new ComboBox();
-            label5 = new Label();
-            txtCustomActionSoundFile = new TextBox();
-            btnBrowseForCustomSoundFile = new Button();
             grpExtraFolders = new GroupBox();
             txtExtraFolders = new TextBox();
             lblExtraFoldersHint = new Label();
+            groupBox4 = new GroupBox();
+            chkShowSaveSubtitlesAsSeparateFiles = new CheckBox();
             grpFfmpeg.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
             groupBox1.SuspendLayout();
             grpExtraFolders.SuspendLayout();
+            groupBox4.SuspendLayout();
             SuspendLayout();
             // 
             // grpFfmpeg
@@ -54,10 +57,10 @@ namespace FFmpegAssistant
             grpFfmpeg.Controls.Add(txtFfmpegPath);
             grpFfmpeg.Controls.Add(btnBrowseFfmpeg);
             grpFfmpeg.Controls.Add(lblFfmpegHint);
-            grpFfmpeg.Location = new Point(12, 12);
+            grpFfmpeg.Location = new Point(15, 656);
             grpFfmpeg.Name = "grpFfmpeg";
             grpFfmpeg.Size = new Size(470, 105);
-            grpFfmpeg.TabIndex = 0;
+            grpFfmpeg.TabIndex = 5;
             grpFfmpeg.TabStop = false;
             grpFfmpeg.Text = "FFmpeg";
             // 
@@ -66,7 +69,7 @@ namespace FFmpegAssistant
             lblFfmpegPath.AutoSize = true;
             lblFfmpegPath.Location = new Point(10, 22);
             lblFfmpegPath.Name = "lblFfmpegPath";
-            lblFfmpegPath.Size = new Size(110, 15);
+            lblFfmpegPath.Size = new Size(107, 15);
             lblFfmpegPath.TabIndex = 0;
             lblFfmpegPath.Text = "Path to ffmpeg.exe";
             // 
@@ -127,10 +130,10 @@ namespace FFmpegAssistant
             groupBox2.Controls.Add(label3);
             groupBox2.Controls.Add(txtNumberOfDownloadAttempts);
             groupBox2.Controls.Add(label2);
-            groupBox2.Location = new Point(10, 138);
+            groupBox2.Location = new Point(12, 235);
             groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(472, 115);
-            groupBox2.TabIndex = 3;
+            groupBox2.Size = new Size(472, 108);
+            groupBox2.TabIndex = 2;
             groupBox2.TabStop = false;
             groupBox2.Text = "Auto-Retry on Download Failure";
             // 
@@ -140,7 +143,7 @@ namespace FFmpegAssistant
             label3.ForeColor = SystemColors.GrayText;
             label3.Location = new Point(11, 79);
             label3.Name = "label3";
-            label3.Size = new Size(136, 15);
+            label3.Size = new Size(144, 15);
             label3.TabIndex = 2;
             label3.Text = "Leave empty for no retries";
             // 
@@ -165,10 +168,10 @@ namespace FFmpegAssistant
             // 
             groupBox3.Controls.Add(cboNewVersionCheck);
             groupBox3.Controls.Add(label4);
-            groupBox3.Location = new Point(12, 522);
+            groupBox3.Location = new Point(14, 573);
             groupBox3.Name = "groupBox3";
-            groupBox3.Size = new Size(470, 89);
-            groupBox3.TabIndex = 6;
+            groupBox3.Size = new Size(470, 77);
+            groupBox3.TabIndex = 4;
             groupBox3.TabStop = false;
             groupBox3.Text = "Check for New Version";
             // 
@@ -187,7 +190,7 @@ namespace FFmpegAssistant
             label4.AutoSize = true;
             label4.Location = new Point(10, 28);
             label4.Name = "label4";
-            label4.Size = new Size(177, 15);
+            label4.Size = new Size(180, 15);
             label4.TabIndex = 0;
             label4.Text = "Check for New Version at Startup";
             // 
@@ -201,12 +204,40 @@ namespace FFmpegAssistant
             groupBox1.Controls.Add(lblFinishedDownlaodSound);
             groupBox1.Controls.Add(label1);
             groupBox1.Controls.Add(cboActionWhenDownloadFinished);
-            groupBox1.Location = new Point(9, 265);
+            groupBox1.Location = new Point(14, 362);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(472, 224);
-            groupBox1.TabIndex = 4;
+            groupBox1.Size = new Size(472, 205);
+            groupBox1.TabIndex = 3;
             groupBox1.TabStop = false;
             groupBox1.Text = "Action When Download Finished";
+            // 
+            // btnBrowseForCustomSoundFile
+            // 
+            btnBrowseForCustomSoundFile.Location = new Point(386, 168);
+            btnBrowseForCustomSoundFile.Name = "btnBrowseForCustomSoundFile";
+            btnBrowseForCustomSoundFile.Size = new Size(27, 23);
+            btnBrowseForCustomSoundFile.TabIndex = 4;
+            btnBrowseForCustomSoundFile.Text = "...";
+            btnBrowseForCustomSoundFile.UseVisualStyleBackColor = true;
+            btnBrowseForCustomSoundFile.Visible = false;
+            // 
+            // txtCustomActionSoundFile
+            // 
+            txtCustomActionSoundFile.Location = new Point(12, 168);
+            txtCustomActionSoundFile.Name = "txtCustomActionSoundFile";
+            txtCustomActionSoundFile.Size = new Size(362, 23);
+            txtCustomActionSoundFile.TabIndex = 3;
+            txtCustomActionSoundFile.Visible = false;
+            // 
+            // label5
+            // 
+            label5.AutoSize = true;
+            label5.Location = new Point(13, 150);
+            label5.Name = "label5";
+            label5.Size = new Size(107, 15);
+            label5.TabIndex = 5;
+            label5.Text = "Custom Sound File";
+            label5.Visible = false;
             // 
             // cmdPlayActionSound
             // 
@@ -257,42 +288,14 @@ namespace FFmpegAssistant
             cboActionWhenDownloadFinished.Size = new Size(359, 23);
             cboActionWhenDownloadFinished.TabIndex = 0;
             // 
-            // label5
-            // 
-            label5.AutoSize = true;
-            label5.Location = new Point(13, 150);
-            label5.Name = "label5";
-            label5.Size = new Size(107, 15);
-            label5.TabIndex = 5;
-            label5.Text = "Custom Sound File";
-            label5.Visible = false;
-            // 
-            // txtCustomActionSoundFile
-            // 
-            txtCustomActionSoundFile.Location = new Point(12, 168);
-            txtCustomActionSoundFile.Name = "txtCustomActionSoundFile";
-            txtCustomActionSoundFile.Size = new Size(362, 23);
-            txtCustomActionSoundFile.TabIndex = 3;
-            txtCustomActionSoundFile.Visible = false;
-            // 
-            // btnBrowseForCustomSoundFile
-            // 
-            btnBrowseForCustomSoundFile.Location = new Point(386, 168);
-            btnBrowseForCustomSoundFile.Name = "btnBrowseForCustomSoundFile";
-            btnBrowseForCustomSoundFile.Size = new Size(27, 23);
-            btnBrowseForCustomSoundFile.TabIndex = 4;
-            btnBrowseForCustomSoundFile.Text = "...";
-            btnBrowseForCustomSoundFile.UseVisualStyleBackColor = true;
-            btnBrowseForCustomSoundFile.Visible = false;
-            // 
             // grpExtraFolders
             // 
             grpExtraFolders.Controls.Add(txtExtraFolders);
             grpExtraFolders.Controls.Add(lblExtraFoldersHint);
-            grpExtraFolders.Location = new Point(12, 622);
+            grpExtraFolders.Location = new Point(10, 12);
             grpExtraFolders.Name = "grpExtraFolders";
             grpExtraFolders.Size = new Size(470, 145);
-            grpExtraFolders.TabIndex = 7;
+            grpExtraFolders.TabIndex = 0;
             grpExtraFolders.TabStop = false;
             grpExtraFolders.Text = "Extra Folders in the Folder List";
             // 
@@ -313,9 +316,29 @@ namespace FFmpegAssistant
             lblExtraFoldersHint.ForeColor = SystemColors.GrayText;
             lblExtraFoldersHint.Location = new Point(10, 118);
             lblExtraFoldersHint.Name = "lblExtraFoldersHint";
-            lblExtraFoldersHint.Size = new Size(340, 15);
+            lblExtraFoldersHint.Size = new Size(347, 15);
             lblExtraFoldersHint.TabIndex = 1;
             lblExtraFoldersHint.Text = "One folder per line, shown in this order after the TV Shows folder";
+            // 
+            // groupBox4
+            // 
+            groupBox4.Controls.Add(chkShowSaveSubtitlesAsSeparateFiles);
+            groupBox4.Location = new Point(10, 167);
+            groupBox4.Name = "groupBox4";
+            groupBox4.Size = new Size(465, 51);
+            groupBox4.TabIndex = 1;
+            groupBox4.TabStop = false;
+            groupBox4.Text = "Show";
+            // 
+            // chkShowSaveSubtitlesAsSeparateFiles
+            // 
+            chkShowSaveSubtitlesAsSeparateFiles.AutoSize = true;
+            chkShowSaveSubtitlesAsSeparateFiles.Location = new Point(10, 22);
+            chkShowSaveSubtitlesAsSeparateFiles.Name = "chkShowSaveSubtitlesAsSeparateFiles";
+            chkShowSaveSubtitlesAsSeparateFiles.Size = new Size(218, 19);
+            chkShowSaveSubtitlesAsSeparateFiles.TabIndex = 0;
+            chkShowSaveSubtitlesAsSeparateFiles.Text = "Show Save Subtitles as Separate Files";
+            chkShowSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
             // 
             // SettingsForm
             // 
@@ -325,6 +348,7 @@ namespace FFmpegAssistant
             CancelButton = btnCancel;
             ClientSize = new Size(494, 817);
             ControlBox = false;
+            Controls.Add(groupBox4);
             Controls.Add(grpExtraFolders);
             Controls.Add(groupBox1);
             Controls.Add(groupBox3);
@@ -349,6 +373,8 @@ namespace FFmpegAssistant
             groupBox1.PerformLayout();
             grpExtraFolders.ResumeLayout(false);
             grpExtraFolders.PerformLayout();
+            groupBox4.ResumeLayout(false);
+            groupBox4.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -380,5 +406,7 @@ namespace FFmpegAssistant
         private GroupBox grpExtraFolders;
         private TextBox txtExtraFolders;
         private Label lblExtraFoldersHint;
+        private GroupBox groupBox4;
+        private CheckBox chkShowSaveSubtitlesAsSeparateFiles;
     }
 }

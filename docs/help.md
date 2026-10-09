@@ -164,6 +164,9 @@ This option is not used for subtitle files.
 
 ### Save Subtitles as Separate Files
 
+This box is hidden by default. To see it, check **Show Save Subtitles as Separate Files** in the
+[settings](#show-save-subtitles-as-separate-files).
+
 Check **Save Subtitles as Separate Files** to save the subtitles that are stored inside the
 downloaded video as `.srt` files in the same folder. Some players and TVs only show subtitles from
 a separate file.
@@ -401,6 +404,13 @@ they are added to the **Folder** list in the main window, in the same order, aft
 Each line must be a full path that starts with a drive letter or `\\server`. Empty lines are
 ignored. If a folder in the list does not exist when you download to it, you are asked whether
 to create it.
+
+### Show Save Subtitles as Separate Files
+
+Check **Show Save Subtitles as Separate Files** to show the
+[Save Subtitles as Separate Files](#save-subtitles-as-separate-files) box in the main window.
+It is off by default. When you turn it off again, the box is hidden and unchecked, so no subtitle
+files are saved.
 
 ## Create Shortcut
 

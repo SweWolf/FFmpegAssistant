@@ -155,6 +155,7 @@ namespace FFmpegAssistant
             AddSuggestedFolder(Path.Combine(videos, "Movies"));
             AddSuggestedFolder(Path.Combine(videos, "TV Shows"));
             RefreshExtraFolders();
+            ApplySaveSubtitlesVisibility();
             cboFolder.SelectedIndex = 0;
 
             cboFolder.SelectedIndexChanged += (s, _) =>
@@ -1942,7 +1943,21 @@ namespace FFmpegAssistant
         {
             using var form = new SettingsForm();
             if (form.ShowDialog(this) == DialogResult.OK)
+            {
                 RefreshExtraFolders();
+                ApplySaveSubtitlesVisibility();
+            }
+        }
+
+        /// <summary>
+        /// Shows or hides the "Save Subtitles as Separate Files" checkbox, as set in Settings.
+        /// A hidden checkbox is also unchecked, so subtitles are never saved by a choice the user can't see.
+        /// </summary>
+        private void ApplySaveSubtitlesVisibility()
+        {
+            bool show = AppSettings.ShowSaveSubtitlesAsSeparateFiles;
+            chkSaveSubtitlesAsSeparateFiles.Visible = show;
+            if (!show) chkSaveSubtitlesAsSeparateFiles.Checked = false;
         }
 
         /// <summary>FFmpeg arguments that validate a file: decode everything, write nothing.</summary>

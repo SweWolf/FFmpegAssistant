@@ -47,9 +47,9 @@ namespace FFmpegAssistant
             lblEstimatedRemaining = new Label();
             menuStrip = new MenuStrip();
             menuTools = new ToolStripMenuItem();
-            menuDownloadQueue = new ToolStripMenuItem();
             menuCreateShortcut = new ToolStripMenuItem();
             menuSettings = new ToolStripMenuItem();
+            menuDownloadQueue = new ToolStripMenuItem();
             mnuValidateVideoFile = new ToolStripMenuItem();
             subtitlesToolStripMenuItem = new ToolStripMenuItem();
             mnuExtractSubtitleFile = new ToolStripMenuItem();
@@ -73,13 +73,13 @@ namespace FFmpegAssistant
             rdoTvShow = new RadioButton();
             rdoMovie = new RadioButton();
             pnlContent = new Panel();
-            txtAttempt = new TextBox();
-            label6 = new Label();
+            chkSaveSubtitlesAsSeparateFiles = new CheckBox();
             txtJob = new TextBox();
             lblJob = new Label();
+            txtAttempt = new TextBox();
+            label6 = new Label();
             chkEnableWatchingWhileDownloading = new CheckBox();
             toolTip1 = new ToolTip(components);
-            chkSaveSubtitlesAsSeparateFiles = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)dgvProgress).BeginInit();
             menuStrip.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -273,13 +273,6 @@ namespace FFmpegAssistant
             menuTools.Size = new Size(47, 20);
             menuTools.Text = "Tools";
             // 
-            // menuDownloadQueue
-            // 
-            menuDownloadQueue.Name = "menuDownloadQueue";
-            menuDownloadQueue.Size = new Size(178, 22);
-            menuDownloadQueue.Text = "Download Queue";
-            menuDownloadQueue.Click += menuDownloadQueue_Click;
-            // 
             // menuCreateShortcut
             // 
             menuCreateShortcut.Name = "menuCreateShortcut";
@@ -293,6 +286,13 @@ namespace FFmpegAssistant
             menuSettings.Size = new Size(178, 22);
             menuSettings.Text = "Settings";
             menuSettings.Click += menuSettings_Click_1;
+            // 
+            // menuDownloadQueue
+            // 
+            menuDownloadQueue.Name = "menuDownloadQueue";
+            menuDownloadQueue.Size = new Size(178, 22);
+            menuDownloadQueue.Text = "Download Queue";
+            menuDownloadQueue.Click += menuDownloadQueue_Click;
             // 
             // mnuValidateVideoFile
             // 
@@ -549,16 +549,18 @@ namespace FFmpegAssistant
             pnlContent.Size = new Size(1074, 825);
             pnlContent.TabIndex = 0;
             // 
-            // txtAttempt
+            // chkSaveSubtitlesAsSeparateFiles
             // 
-            txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            txtAttempt.BorderStyle = BorderStyle.FixedSingle;
-            txtAttempt.Location = new Point(861, 692);
-            txtAttempt.Name = "txtAttempt";
-            txtAttempt.ReadOnly = true;
-            txtAttempt.Size = new Size(59, 23);
-            txtAttempt.TabIndex = 18;
-            txtAttempt.TabStop = false;
+            chkSaveSubtitlesAsSeparateFiles.AutoSize = true;
+            chkSaveSubtitlesAsSeparateFiles.Font = new Font("Segoe UI", 12F);
+            chkSaveSubtitlesAsSeparateFiles.Location = new Point(414, 346);
+            chkSaveSubtitlesAsSeparateFiles.Name = "chkSaveSubtitlesAsSeparateFiles";
+            chkSaveSubtitlesAsSeparateFiles.Size = new Size(245, 25);
+            chkSaveSubtitlesAsSeparateFiles.TabIndex = 5;
+            chkSaveSubtitlesAsSeparateFiles.Text = "Save Subtitles as Separate Files";
+            toolTip1.SetToolTip(chkSaveSubtitlesAsSeparateFiles, resources.GetString("chkSaveSubtitlesAsSeparateFiles.ToolTip"));
+            chkSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
+            chkSaveSubtitlesAsSeparateFiles.Visible = false;
             // 
             // txtJob
             // 
@@ -581,9 +583,20 @@ namespace FFmpegAssistant
             lblJob.Font = new Font("Segoe UI", 10F);
             lblJob.Location = new Point(966, 692);
             lblJob.Name = "lblJob";
-            lblJob.Size = new Size(31, 19);
+            lblJob.Size = new Size(30, 19);
             lblJob.TabIndex = 19;
             lblJob.Text = "Job";
+            // 
+            // txtAttempt
+            // 
+            txtAttempt.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            txtAttempt.BorderStyle = BorderStyle.FixedSingle;
+            txtAttempt.Location = new Point(861, 692);
+            txtAttempt.Name = "txtAttempt";
+            txtAttempt.ReadOnly = true;
+            txtAttempt.Size = new Size(59, 23);
+            txtAttempt.TabIndex = 18;
+            txtAttempt.TabStop = false;
             // 
             // label6
             // 
@@ -607,18 +620,6 @@ namespace FFmpegAssistant
             chkEnableWatchingWhileDownloading.Text = "Enable Watching While Downloading";
             toolTip1.SetToolTip(chkEnableWatchingWhileDownloading, resources.GetString("chkEnableWatchingWhileDownloading.ToolTip"));
             chkEnableWatchingWhileDownloading.UseVisualStyleBackColor = true;
-            // 
-            // chkSaveSubtitlesAsSeparateFiles
-            // 
-            chkSaveSubtitlesAsSeparateFiles.AutoSize = true;
-            chkSaveSubtitlesAsSeparateFiles.Font = new Font("Segoe UI", 12F);
-            chkSaveSubtitlesAsSeparateFiles.Location = new Point(414, 346);
-            chkSaveSubtitlesAsSeparateFiles.Name = "chkSaveSubtitlesAsSeparateFiles";
-            chkSaveSubtitlesAsSeparateFiles.Size = new Size(247, 25);
-            chkSaveSubtitlesAsSeparateFiles.TabIndex = 5;
-            chkSaveSubtitlesAsSeparateFiles.Text = "Save Subtitles as Separate Files";
-            toolTip1.SetToolTip(chkSaveSubtitlesAsSeparateFiles, resources.GetString("chkSaveSubtitlesAsSeparateFiles.ToolTip"));
-            chkSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 

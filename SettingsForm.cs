@@ -15,6 +15,7 @@ namespace FFmpegAssistant
             txtNumberOfDownloadAttempts.Text = AppSettings.NumberOfDownloadAttempts.ToString();
             cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
             txtExtraFolders.Lines = AppSettings.ExtraFolders.ToArray();
+            chkShowSaveSubtitlesAsSeparateFiles.Checked = AppSettings.ShowSaveSubtitlesAsSeparateFiles;
 
             cboFinishedDownlaodSound.Items.AddRange(SoundLibrary.GetAvailableSounds().ToArray());
             cboFinishedDownlaodSound.Items.Add(CustomSoundSentinel);
@@ -166,6 +167,7 @@ namespace FFmpegAssistant
             AppSettings.ActionWhenDownloadFinished = cboActionWhenDownloadFinished.SelectedItem?.ToString() ?? "Play a Sound";
             AppSettings.FinishedDownloadSoundFile = GetSelectedSoundIdentifier();
             AppSettings.ExtraFolders = extraFolders;
+            AppSettings.ShowSaveSubtitlesAsSeparateFiles = chkShowSaveSubtitlesAsSeparateFiles.Checked;
 
             DialogResult = DialogResult.OK;
             Close();

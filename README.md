@@ -58,6 +58,8 @@ In other words, FFmpeg Assistant is a user interface for the commands that Priva
 - **Auto-retry on failure**: set the maximum number of download attempts (leave it empty, 0 or 1 to disable auto-retry)
 - **Check for new version at startup**: Yes/No toggle for the automatic update check
 - **Action when download finished**: play a sound (built-in or your own custom file), show a message box, or do nothing
+- **Extra folders in the Folder list**: add the folders you often save to
+- **Show Save Subtitles as Separate Files**: shows the checkbox in the main window that saves a downloaded video's subtitles as `.srt` files next to it (hidden by default)
 
 ### Logs
 
