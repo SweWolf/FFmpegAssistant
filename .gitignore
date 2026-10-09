@@ -28,3 +28,6 @@ publish-small/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Log files written by the TeraTool image viewer when it opens images here
+TeraTool_*.txt
