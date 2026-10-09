@@ -13,6 +13,7 @@
     <Company>SweWolf Software</Company>
     <Authors>Uffe Peter Walderö</Authors>
     <Version>1.6.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <PackageIcon>FFmpegAssistant.png</PackageIcon>
     <Description>Downloads and saves video streams using FFmpeg, with real-time progress tracking and automatic episode naming.</Description>
     <RepositoryUrl>https://github.com/SweWolf/FFmpegAssistant</RepositoryUrl>
