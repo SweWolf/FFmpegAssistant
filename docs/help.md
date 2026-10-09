@@ -102,7 +102,7 @@ command. If the name has another extension, the right one is added after it, so 
 ### Auto-Suggest Folder and File Name
 
 This area fills in **Folder** and **File Name** for you, with the title, year and episode
-number in the name. Media servers such as Plex, Jellyfin and Kodi use these names to recognise
+number in the name. Media servers such as Plex, Jellyfin and Kodi use these names to recognize
 the movie or show and fetch its poster, description and episode titles.
 
 #### Movie
@@ -163,6 +163,8 @@ the box before the download is finished, you get the usual notification. Errors 
 This option is not used for subtitle files.
 
 ### Save Subtitles as Separate Files
+
+*(new in version 1.6.0)*
 
 This box is hidden by default. To see it, check **Show Save Subtitles as Separate Files** in the
 [settings](#show-save-subtitles-as-separate-files).
@@ -231,7 +233,7 @@ downloaded parts instead, for example `120/450`.
 The progress bar and **Estimated remaining time** include the check of the file after the
 download (see [What Happens During a Download](#what-happens-during-a-download)).
 
-**Status** shows what is going on. Its colour shows how things are going:
+**Status** shows what is going on. Its color shows how things are going:
 
 - **light yellow**: the downloaded file is being checked,
 - **orange**: the download failed and is being tried again,
@@ -279,6 +281,8 @@ Also:
   it starts whether to start the download again (see [Download Queue](#download-queue)).
 
 ## Download Queue
+
+*(new in version 1.6.0)*
 
 You don't have to wait until a download is finished to start the next one. During a download,
 fill in the next command, folder and file name, and click **Add to Queue**. The download waits in
@@ -357,7 +361,7 @@ as a separate file.
 The subtitle file gets the right extension for its format, for example `.srt`, `.ass` or `.vtt`.
 
 To download subtitles from the web instead, paste the Privatkopiera command or the address of
-the subtitle playlist (`.m3u8`) into **Command**. FFmpeg Assistant recognises subtitle playlists
+the subtitle playlist (`.m3u8`) into **Command**. FFmpeg Assistant recognizes subtitle playlists
 and saves them as `.srt` files.
 
 ## Settings
@@ -396,6 +400,8 @@ at the right end of the menu bar. Click it to open the download page.
 
 ### Extra Folders in the Folder List
 
+*(new in version 1.6.0)*
+
 Add the folders you often save to, for example `D:\Videos\Music Videos` or a folder on a network
 drive. Type one folder per line, and press **Enter** to start a new line. When you click **OK**,
 they are added to the **Folder** list in the main window, in the same order, after the
@@ -406,6 +412,8 @@ ignored. If a folder in the list does not exist when you download to it, you are
 to create it.
 
 ### Show Save Subtitles as Separate Files
+
+*(new in version 1.6.0)*
 
 Check **Show Save Subtitles as Separate Files** to show the
 [Save Subtitles as Separate Files](#save-subtitles-as-separate-files) box in the main window.
@@ -433,7 +441,7 @@ FFmpegAssistant.exe "https://example.com/video.m3u8"
 
 | Key | Action |
 |-----|--------|
-| **F1** | Open this help |
+| **F1** | Open this help *(new in version 1.6.0)* |
 | **Ctrl+E** | Download, or Add to Queue during a download |
 | **Ctrl+O** | Open File |
 | **Ctrl+Shift+O** | Open Folder |
@@ -500,6 +508,6 @@ A download with the same folder and file name is already waiting in the queue. C
 name (for example the episode number).
 
 **The episode number is not suggested.**
-FFmpeg Assistant only recognises episodes named like `My Show - s01e05.mp4`, with the same
+FFmpeg Assistant only recognizes episodes named like `My Show - s01e05.mp4`, with the same
 extension as the new download. Check the names of the files in the show's folder, or enter
 **Season** and **Episode** yourself.

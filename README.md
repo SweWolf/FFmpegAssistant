@@ -16,11 +16,12 @@ In other words, FFmpeg Assistant is a user interface for the commands that Priva
 - Title box shows (and lets you edit) the detected show or movie title used for the output file name
 - Auto-increments episode numbers based on existing files in the folder
 - Season and Episode boxes let you override the auto-suggested episode number
+- Download queue: add the next downloads while one is running (for example all the episodes of a season); they start one after the other
 - Real-time progress grid (duration, frame, FPS, size, time, bitrate, speed, elapsed) with a progress bar
 - Estimated remaining time with stable speed sampling
 - Color-coded status messages: light yellow while in progress, orange when retrying, red on errors and green when done
 - Watch while downloading: streams to a .ts file so you can open it immediately, then converts it to the final format automatically when the download is complete
-- Power outage protection: downloads to a `(part)` file and only renames it to the final name after the file has been validated
+- Power outage protection: downloads to a `(part)` file and only renames it to the final name after the file has been validated; if the power goes out, the interrupted download and the queue are offered again the next time the app starts
 - Auto-retry on failure: configurable maximum number of attempts; each retry is shown in the Attempt counter
 - Validates the downloaded video file after each attempt
 - Keeps the PC awake during a download, so it doesn't go to sleep halfway (the screen can still turn off)
@@ -28,6 +29,8 @@ In other words, FFmpeg Assistant is a user interface for the commands that Priva
 
 ### Tools
 - **Validate Video File** (Tools menu): check any video file on your computer with the same FFmpeg check that runs after a download
+- Save a downloaded video's subtitles as separate `.srt` files next to it (optional, see Settings)
+- Built-in help: **Help > FFmpeg Assistant Help** (F1)
 - Extract an embedded subtitle track from a video file, or download subtitles directly from an M3U8 stream
 - Create Desktop and/or Start Menu shortcuts via the Tools menu
 - Automatic update check against GitHub Releases on startup
@@ -46,7 +49,8 @@ In other words, FFmpeg Assistant is a user interface for the commands that Priva
 
 | Shortcut | Action |
 |---|---|
-| Ctrl+E | Download |
+| F1 | Open the help |
+| Ctrl+E | Download (Add to Queue during a download) |
 | Ctrl+O | Open File |
 | Ctrl+Shift+O | Open Folder |
 | Alt+B | Browse for the output folder |
