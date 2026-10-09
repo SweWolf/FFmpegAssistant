@@ -31,4 +31,6 @@ Desktop.ini
 
 # Log files written by the TeraTool image viewer when it opens images here
 TeraTool_*.txt
+
+# Release assets (EXE and zip) before they are uploaded to GitHub
 publish-release/
