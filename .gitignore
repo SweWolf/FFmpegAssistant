@@ -31,3 +31,4 @@ Desktop.ini
 
 # Log files written by the TeraTool image viewer when it opens images here
 TeraTool_*.txt
+publish-release/
