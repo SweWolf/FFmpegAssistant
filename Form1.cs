@@ -120,6 +120,8 @@ namespace FFmpegAssistant
             // Icon is set by the Designer via InitializeComponent (Form1.resx).
             // No override needed here — overriding can lose alpha channel transparency.
 
+            LogFiles.DeleteOldLogsOncePerDay();
+
             // The form starts maximized. Make the size it gets when restored fit the screen's working area
             // (with display scaling the design size can be taller than the screen), centered.
             // While maximized, Size returns the maximized size, so start from RestoreBounds.
@@ -1307,11 +1309,7 @@ namespace FFmpegAssistant
             if (File.Exists(downloadPath))
                 command = Regex.Replace(command, @"^ffmpeg\s+", "ffmpeg -y ", RegexOptions.IgnoreCase);
 
-            string logsFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "SweWolfSoftware", "FFmpegAssist", "Logs");
-            Directory.CreateDirectory(logsFolder);
-            string logFile = Path.Combine(logsFolder, Path.GetFileNameWithoutExtension(fileName) + ".txt");
+            string logFile = LogFiles.NewDownloadLogFile(fileName);
 
             string arguments = command[(command.IndexOf(' ') + 1)..];
 
@@ -1338,6 +1336,7 @@ namespace FFmpegAssistant
                 ResetProgress();
                 _cts = new CancellationTokenSource();
                 _lastLogFile = logFile;
+                LogFiles.AppendFFmpegCall(AppSettings.GetFfmpegExe(), currentArguments);
                 btnCancel.Enabled = true;
                 btnOpenFile.Enabled = false;
                 btnOpenLogFile.Enabled = false;
@@ -1904,6 +1903,24 @@ namespace FFmpegAssistant
 
         private void menuViewHelp_Click(object? sender, EventArgs e) => HelpFiles.OpenHelp(AppTitle);
 
+        private void menuOpenFFmpegCallLog_Click(object? sender, EventArgs e)
+        {
+            if (!File.Exists(LogFiles.FFmpegCallsLogFile))
+            {
+                MessageBox.Show("No FFmpeg calls have been logged yet. The log is created at the first download.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            Process.Start(new ProcessStartInfo(LogFiles.FFmpegCallsLogFile) { UseShellExecute = true });
+        }
+
+        private void menuOpenLogFolder_Click(object? sender, EventArgs e)
+        {
+            // Created if missing, so Explorer always opens the right folder (empty before the first download)
+            Directory.CreateDirectory(LogFiles.LogFolder);
+            Process.Start("explorer.exe", $"\"{LogFiles.LogFolder}\"");
+        }
+
         private void menuAbout_Click(object sender, EventArgs e)
         {
             using var about = new AboutForm();
@@ -2001,10 +2018,7 @@ namespace FFmpegAssistant
             txtFileName.Text = Path.GetFileName(filePath);
             _validationFileName = txtFileName.Text;
 
-            string logsFolder = Path.Combine(AppLogFolder, "Logs");
-            Directory.CreateDirectory(logsFolder);
-            // Own log name, so it doesn't overwrite the download log of a file with the same name
-            string logFile = Path.Combine(logsFolder, Path.GetFileNameWithoutExtension(filePath) + " - validation.txt");
+            string logFile = LogFiles.NewValidationLogFile(filePath);
 
             _downloadRunning = true;
 #if DEBUG

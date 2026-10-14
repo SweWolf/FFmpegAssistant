@@ -56,6 +56,9 @@ namespace FFmpegAssistant
             menuHelp = new ToolStripMenuItem();
             menuViewHelp = new ToolStripMenuItem();
             menuViewHelpSeparator = new ToolStripSeparator();
+            menuOpenFFmpegCallLog = new ToolStripMenuItem();
+            menuOpenLogFolder = new ToolStripMenuItem();
+            menuLogSeparator = new ToolStripSeparator();
             menuAbout = new ToolStripMenuItem();
             menuNewVersion = new ToolStripMenuItem();
             btnClear = new Button();
@@ -317,7 +320,7 @@ namespace FFmpegAssistant
             // 
             // menuHelp
             // 
-            menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuViewHelp, menuViewHelpSeparator, menuAbout });
+            menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuViewHelp, menuViewHelpSeparator, menuOpenFFmpegCallLog, menuOpenLogFolder, menuLogSeparator, menuAbout });
             menuHelp.Name = "menuHelp";
             menuHelp.Size = new Size(44, 20);
             menuHelp.Text = "Help";
@@ -334,9 +337,28 @@ namespace FFmpegAssistant
             // 
             menuViewHelpSeparator.Name = "menuViewHelpSeparator";
             menuViewHelpSeparator.Size = new Size(211, 6);
-            // 
+            //
+            // menuOpenFFmpegCallLog
+            //
+            menuOpenFFmpegCallLog.Name = "menuOpenFFmpegCallLog";
+            menuOpenFFmpegCallLog.Size = new Size(214, 22);
+            menuOpenFFmpegCallLog.Text = "Open FFmpeg Call Log";
+            menuOpenFFmpegCallLog.Click += menuOpenFFmpegCallLog_Click;
+            //
+            // menuOpenLogFolder
+            //
+            menuOpenLogFolder.Name = "menuOpenLogFolder";
+            menuOpenLogFolder.Size = new Size(214, 22);
+            menuOpenLogFolder.Text = "Open Log Folder";
+            menuOpenLogFolder.Click += menuOpenLogFolder_Click;
+            //
+            // menuLogSeparator
+            //
+            menuLogSeparator.Name = "menuLogSeparator";
+            menuLogSeparator.Size = new Size(211, 6);
+            //
             // menuAbout
-            // 
+            //
             menuAbout.Name = "menuAbout";
             menuAbout.Size = new Size(214, 22);
             menuAbout.Text = "About";
@@ -670,6 +692,9 @@ namespace FFmpegAssistant
         private ToolStripMenuItem menuAbout;
         private ToolStripMenuItem menuViewHelp;
         private ToolStripSeparator menuViewHelpSeparator;
+        private ToolStripMenuItem menuOpenFFmpegCallLog;
+        private ToolStripMenuItem menuOpenLogFolder;
+        private ToolStripSeparator menuLogSeparator;
         private ToolStripMenuItem menuNewVersion;
         private ToolStripMenuItem menuSettings;
         private ToolStripMenuItem mnuValidateVideoFile;

@@ -454,17 +454,23 @@ FFmpeg Assistant keeps its files in `%AppData%\SweWolfSoftware\FFmpegAssist`:
 
 - `FFmpegAssistant.log`: a short line for every download: the command, the result, retries and
   so on. It is kept short automatically.
-- `Logs\<file name>.txt`: FFmpeg's report of each download (the last attempt). Click
-  **Open Log File** to open the latest one. The check of the file after the download is not
-  included.
-- `Logs\<file name> - validation.txt`: FFmpeg's report of each
+- `Logs\download_<date>_<time>_<file name>.txt`: FFmpeg's report of each download (the last
+  attempt). Click **Open Log File** to open the latest one. The check of the file after the
+  download is not included.
+- `Logs\validate_<date>_<time>_<file name>.txt`: FFmpeg's report of each
   [Validate Video File](#validate-video-file) check.
+- `FFmpeg_calls.log`: one line for every download attempt, with the time and the full FFmpeg
+  command line. You can copy a line and run it in a terminal. Open it with **Help > Open FFmpeg
+  Call Log** *(new in version 1.7.0)*. When it gets larger than 0.5 MB, the oldest lines are
+  removed.
 - `Logs\errors.log`: a list of the downloads that failed.
+
+The `download_` and `validate_` files are deleted automatically when they are more than 30 days
+old *(new in version 1.7.0)*.
 - `Queue.json`: the downloads that are waiting in the [Download Queue](#download-queue). It is
   deleted when the queue is empty.
 
-To open the folder, type `%AppData%\SweWolfSoftware\FFmpegAssist` in the address bar of File
-Explorer.
+To open the `Logs` folder, click **Help > Open Log Folder** *(new in version 1.7.0)*.
 
 ## Troubleshooting
 

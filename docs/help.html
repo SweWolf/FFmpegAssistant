@@ -583,21 +583,28 @@ address. It is put into the <strong>Command</strong> box:</p>
 <li><code>FFmpegAssistant.log</code>: a short line for every download:
 the command, the result, retries and so on. It is kept short
 automatically.</li>
-<li><code>Logs\&lt;file name&gt;.txt</code>: FFmpeg’s report of each
-download (the last attempt). Click <strong>Open Log File</strong> to
-open the latest one. The check of the file after the download is not
-included.</li>
-<li><code>Logs\&lt;file name&gt; - validation.txt</code>: FFmpeg’s
-report of each <a href="#validate-video-file">Validate Video File</a>
-check.</li>
+<li><code>Logs\download_&lt;date&gt;_&lt;time&gt;_&lt;file name&gt;.txt</code>:
+FFmpeg’s report of each download (the last attempt). Click <strong>Open
+Log File</strong> to open the latest one. The check of the file after
+the download is not included.</li>
+<li><code>Logs\validate_&lt;date&gt;_&lt;time&gt;_&lt;file name&gt;.txt</code>:
+FFmpeg’s report of each <a href="#validate-video-file">Validate Video
+File</a> check.</li>
+<li><code>FFmpeg_calls.log</code>: one line for every download attempt,
+with the time and the full FFmpeg command line. You can copy a line and
+run it in a terminal. Open it with <strong>Help &gt; Open FFmpeg Call
+Log</strong> <em>(new in version 1.7.0)</em>. When it gets larger than
+0.5 MB, the oldest lines are removed.</li>
 <li><code>Logs\errors.log</code>: a list of the downloads that
 failed.</li>
-<li><code>Queue.json</code>: the downloads that are waiting in the <a href="#download-queue">Download Queue</a>. It is deleted when the queue
-is empty.</li>
 </ul>
-<p>To open the folder, type
-<code>%AppData%\SweWolfSoftware\FFmpegAssist</code> in the address bar
-of File Explorer.</p>
+<p>The <code>download_</code> and <code>validate_</code> files are
+deleted automatically when they are more than 30 days old <em>(new in
+version 1.7.0)</em>. - <code>Queue.json</code>: the downloads that are
+waiting in the <a href="#download-queue">Download Queue</a>. It is
+deleted when the queue is empty.</p>
+<p>To open the <code>Logs</code> folder, click <strong>Help &gt; Open
+Log Folder</strong> <em>(new in version 1.7.0)</em>.</p>
 <h2 id="troubleshooting">Troubleshooting</h2>
 <p><strong>“FFmpeg was not found on this system.”</strong> FFmpeg
 Assistant can’t find <code>ffmpeg.exe</code>. Click <strong>Yes</strong>
