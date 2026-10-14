@@ -115,6 +115,7 @@ Choose **Movie** to save the file in **Videos\\Movies** as `Title (Year).mp4`.
   [IMDb](https://www.imdb.com) or [The Movie Database](https://www.themoviedb.org). It helps
   Plex, Jellyfin and Kodi find the right movie when several have the same title. You can write
   it with 2 or 4 digits: `26` becomes `2026` when you leave the box, and `95` becomes `1995`.
+  Choosing **Movie** clears the box.
 
 #### TV Show
 
@@ -137,12 +138,14 @@ Choose **TV Show** to save the file in its own folder under **Videos\\TV Shows**
 #### Automatic Recognition
 
 - When you leave the **Title** box, FFmpeg Assistant looks for a folder with that title in
-  **Movies** and **TV Shows**, with or without a year, for example `My Show (2024)`. If it finds
-  exactly one, it chooses **Movie** or **TV Show** and fills in **Year** for you.
-- FFmpeg Assistant remembers which folder under **TV Shows** you downloaded each show to. The
-  next time you paste a command for the same show while **TV Show** is chosen, or choose
-  **TV Show** after pasting it, that folder is chosen automatically, and the next episode is
-  suggested. **Title** and **Year** are filled in from the folder name. This is useful when the
+  **TV Shows**, with or without a year, for example `My Show (2024)`. If it finds exactly one,
+  it chooses **TV Show** and fills in **Year** for you. Movies are not searched: they are all
+  saved directly in the **Movies** folder.
+- FFmpeg Assistant remembers which folder under **TV Shows** you downloaded each show to. When
+  you paste a command for a show that has a folder (remembered or with a matching name) and you
+  haven't chosen **Movie** or **TV Show** yet, **TV Show** is chosen for you. If you had chosen
+  **Movie**, it is left alone: choose **TV Show** yourself to get the same result. Either way,
+  that folder is chosen automatically, and the next episode is suggested. **Title** and **Year** are filled in from the folder name. This is useful when the
   command has the wrong name for the show: if it says `Gränslandet` and you changed **Title** to
   `Robinson Gränslandet` before you downloaded the first episode, the next episodes get
   `Robinson Gränslandet` automatically.
@@ -195,10 +198,10 @@ FFmpeg Assistant shows what went wrong. The downloaded video is not affected.
 ### Downloading
 
 - **Download** starts the download. During a download the button is called **Add to Queue**: it
-  adds the next download to the [Download Queue](#download-queue). Once a command is downloading
-  or in the queue, the button is disabled until you change the **Command**, **Folder** or
-  **File Name**, so the same video isn't downloaded twice by mistake. If the download fails or you
-  cancel it, the button is enabled again, so you can start it again.
+  adds the next download to the [Download Queue](#download-queue). A command that is already
+  downloading or waiting in the queue is refused with a message, whatever the folder or file name
+  is: the same download can't be added twice. If the download fails or you cancel it, you can add
+  it again.
 - **Cancel** stops the download. If a partial file was saved, you are asked whether to delete it.
   If more downloads are waiting in the queue, you are first asked whether to cancel them too.
 - **Clear** empties all the boxes, so you can start over. During a download it only empties the
@@ -292,7 +295,7 @@ time, counting the episodes in the queue.
 
 FFmpeg Assistant checks each download when you add it, so the questions come while you are at the
 PC: whether to create a missing folder, and whether to overwrite a file that already exists. The
-same file can't be in the queue twice.
+same command (or the same file) can't be in the queue twice.
 
 **Job**, at the right of **Status** and **Attempt**, shows which download is running, for example `2/5`. Click it, or choose
 **Tools > Download Queue**, to see the queue in its own window. It shows the **Status**,

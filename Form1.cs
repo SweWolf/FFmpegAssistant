@@ -25,6 +25,7 @@ namespace FFmpegAssistant
         private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
         private bool _settingCategoryFromAutoDetect;
+        private bool _autoSelectingTvShow; // TV Show checked by a paste: don't move the focus to Download
         private bool _closeAfterCancel;
         private bool _commandSetByExtractFeature;
         private bool _settingExtractCommand;
@@ -39,7 +40,8 @@ namespace FFmpegAssistant
         private bool _cancelQueue;     // Cancel > Yes: remove the waiting downloads when the current one has ended
         private int _jobsStartedInRun; // downloads started since the queue started, for the Job box ("2/5")
         private QueueForm? _queueForm;
-        private bool _runBlockedUntilEdit; // the fields were just downloaded or queued: see UpdateRunButton
+        private long _lastRunClickTick = -DoubleClickIgnoreMs; // time of the last accepted Download / Add to Queue click
+        private const int DoubleClickIgnoreMs = 3000;
 
         // Folders the app itself suggested: created without asking if they don't exist yet
         private readonly HashSet<string> _suggestedFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -224,6 +226,7 @@ namespace FFmpegAssistant
                         if (outFile != null)
                             txtFileName.Text = outFile;
                     }
+                    TrySelectTvShowFromPastedCommand(cmd);
                     TryApplyTvShowHistory(cmd, setTitle: true);
                 }
             };
@@ -240,7 +243,6 @@ namespace FFmpegAssistant
             // Also clear the extract-feature flag when the user replaces the command themselves.
             txtOriginalCommand.TextChanged += (s, _) =>
             {
-                UnblockRunButton(); // an edited command can be downloaded (again)
                 if (!_downloadRunning)
                     ClearStatus();
                 if (!_settingExtractCommand)
@@ -248,11 +250,9 @@ namespace FFmpegAssistant
             };
             txtFileName.TextChanged += (s, _) =>
             {
-                UnblockRunButton(); // e.g. the same video under another name
                 if (!_downloadRunning)
                     ClearStatus();
             };
-            cboFolder.TextChanged += (s, _) => UnblockRunButton(); // e.g. the same video in another folder
 
             // Command-line argument takes priority; fall back to clipboard when nothing was passed.
             string? startup = _startupCommand;
@@ -817,6 +817,11 @@ namespace FFmpegAssistant
             if (_preparingJob) return;
             if (_downloadRunning && !_queueRunning) return; // Tools > Validate Video File is running
 
+            // A double click: ignore the second click (the first one is already being handled)
+            long now = Environment.TickCount64;
+            if (now - _lastRunClickTick < DoubleClickIgnoreMs) return;
+            _lastRunClickTick = now;
+
             // While downloading, the button reads "Add to Queue". Only one window can use the queue.
             bool addToQueue = _queueRunning;
             if (addToQueue && !_queue.TryTakeOwnership())
@@ -861,10 +866,8 @@ namespace FFmpegAssistant
             {
                 UpdateJobBox();
                 SuggestNextEpisode(cboFolder.Text); // the queued episode counts, so this moves on to the next one
-                BlockRunUntilEdit(); // after the suggestion: the app changing File Name isn't an edit
                 return;
             }
-            BlockRunUntilEdit();
             await RunQueueAsync();
         }
 
@@ -910,10 +913,6 @@ namespace FFmpegAssistant
                     entry.Reason = reason;
                     _queue.Update();
                     finished.Add(entry);
-
-                    // A failed or cancelled download can be started again with the same fields
-                    if (outcome is QueueStatus.Failed or QueueStatus.Cancelled)
-                        UnblockRunButton();
 
                     if (_cancelQueue)
                     {
@@ -999,10 +998,10 @@ namespace FFmpegAssistant
         private bool IsQueueRun => _jobsStartedInRun > 1 || _queue.WaitingCount > 0;
 
         /// <summary>
-        /// Download, or "Add to Queue" while downloads run. Disabled while a download is prepared, during
-        /// Tools > Validate Video File, and after a download is started or queued, until Command, Folder
-        /// or File Name is edited: the same video twice is no use (and this stops a double click).
-        /// A failed or cancelled download enables it again, to start it again.
+        /// Download, or "Add to Queue" while downloads run. Disabled only while a download is prepared and
+        /// during Tools > Validate Video File. A command that is already waiting or running is refused
+        /// with a message (see PrepareDownloadJobAsync), and a second click within DoubleClickIgnoreMs of
+        /// the first is ignored (see btnRun_Click).
         /// Validate Video File and Extract Subtitle File are disabled during a download: they replace
         /// the fields.
         /// </summary>
@@ -1012,22 +1011,19 @@ namespace FFmpegAssistant
             toolTip1.SetToolTip(btnRun, _queueRunning
                 ? "Add this download to the queue: it starts when the downloads before it have finished"
                 : "FFmpeg runs the command and downloads the video file");
-            btnRun.Enabled = !_preparingJob && (_queueRunning || !_downloadRunning) && !_runBlockedUntilEdit;
+            btnRun.Enabled = !_preparingJob && (_queueRunning || !_downloadRunning);
             mnuValidateVideoFile.Enabled = !_downloadRunning;
             mnuExtractSubtitleFile.Enabled = !_downloadRunning;
         }
 
-        private void BlockRunUntilEdit()
+        /// <summary>
+        /// The input of an FFmpeg command (the value after -i), which identifies the download. Without a
+        /// -i the whole command is used. Whitespace is trimmed, so only the input itself is compared.
+        /// </summary>
+        private static string GetCommandInput(string command)
         {
-            _runBlockedUntilEdit = true;
-            UpdateRunButton();
-        }
-
-        private void UnblockRunButton()
-        {
-            if (!_runBlockedUntilEdit) return;
-            _runBlockedUntilEdit = false;
-            UpdateRunButton();
+            var m = Regex.Match(command, @"-i\s+(""[^""]*""|\S+)", RegexOptions.IgnoreCase);
+            return (m.Success ? m.Groups[1].Value.Trim('"') : command).Trim();
         }
 
         /// <summary>The Job box: "2/5" means the second of five downloads is running.</summary>
@@ -1128,6 +1124,21 @@ namespace FFmpegAssistant
                 MessageBox.Show("The Command box shows the command of the last validation.\n\n" +
                                 "Paste a download command to start a download.",
                     AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtOriginalCommand.Focus();
+                return null;
+            }
+
+            // The same download twice is no use, whatever the file name or folder: compare the input
+            // of the command, not the whole text. Done before the pre-fetch, for an instant answer.
+            string input = GetCommandInput(originalCommand);
+            var duplicate = _queue.Entries.FirstOrDefault(q => q.IsPending &&
+                string.Equals(GetCommandInput(q.Job.OriginalCommand), input, StringComparison.OrdinalIgnoreCase));
+            if (duplicate != null)
+            {
+                MessageBox.Show(duplicate.Status == QueueStatus.Running
+                        ? "This command is already being downloaded.\n\nThe same download can't be added twice."
+                        : "This command is already in the download queue.\n\nThe same download can't be added twice.",
+                    AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtOriginalCommand.Focus();
                 return null;
             }
@@ -2888,11 +2899,11 @@ namespace FFmpegAssistant
 
             if (!_settingCategoryFromAutoDetect)
             {
+                txtYear.Text = ""; // a year left over from a TV show doesn't belong to this movie
+
                 string? showName = ExtractShowName(txtOriginalCommand.Text.Trim());
                 if (!string.IsNullOrEmpty(showName))
                     txtTitle.Text = showName;
-
-                TryAutoDetectCategoryAndYearFromTitle();
             }
 
             lblSeason.Visible = false;
@@ -3012,8 +3023,31 @@ namespace FFmpegAssistant
 
             UpdateFolderAndFileNameFromTitle();
 
-            if (!_settingCategoryFromAutoDetect)
+            if (!_settingCategoryFromAutoDetect && !_autoSelectingTvShow)
                 btnRun.Focus();
+        }
+
+        /// <summary>
+        /// Runs when a command is pasted while neither radio button is checked: if the show is in
+        /// the TV show history, or exactly one folder in the TV Shows base folder matches its name,
+        /// checks TV Show, which then fills in Title, Year, folder and next episode as if the user had
+        /// clicked it. Movies are never guessed: there are no series of movies to find. Does nothing if
+        /// the user has already chosen a radio button (clicking TV Show later triggers the same logic).
+        /// </summary>
+        private void TrySelectTvShowFromPastedCommand(string command)
+        {
+            if (rdoMovie.Checked || rdoTvShow.Checked) return;
+
+            string? showName = ExtractShowName(command);
+            if (string.IsNullOrEmpty(showName)) return;
+
+            bool known = TvShowHistory.LookupFolder(showName) != null
+                || FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), showName, isTvShow: true).Count() == 1;
+            if (!known) return;
+
+            _autoSelectingTvShow = true;
+            try { rdoTvShow.Checked = true; }
+            finally { _autoSelectingTvShow = false; }
         }
 
         /// <summary>
@@ -3036,10 +3070,9 @@ namespace FFmpegAssistant
 
         /// <summary>
         /// Runs after the Title box is set — either auto-filled from the command when a radio
-        /// button is checked, or manually typed and then left. Scans the Movies and/or TV Shows
-        /// base folders for an existing subfolder named exactly "Title" or "Title (Year)". Only
-        /// the category matching an already-checked radio button is scanned; if neither is
-        /// checked, both are. A single match checks the corresponding radio button (without
+        /// button is checked, or manually typed and then left. Scans the TV Shows base folder for
+        /// an existing subfolder named exactly "Title" or "Title (Year)". Does nothing when Movie is
+        /// checked: movies have no folder of their own. A single match checks TV Show (without
         /// re-parsing Title from the command) and fills in the year if the folder name carried
         /// one. Zero or multiple matches make no changes, since there is nothing — or too much —
         /// to guess from.
@@ -3049,25 +3082,18 @@ namespace FFmpegAssistant
             string title = txtTitle.Text.Trim();
             if (string.IsNullOrEmpty(title)) return;
 
-            var matches = new List<(bool isTvShow, string? year)>();
+            // Movies are stored directly in the Movies folder, so there is no folder to find for them.
+            if (rdoMovie.Checked) return;
 
-            if (!rdoTvShow.Checked)
-                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[1]?.ToString(), title, isTvShow: false));
-            if (!rdoMovie.Checked)
-                matches.AddRange(FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), title, isTvShow: true));
-
+            var matches = FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), title, isTvShow: true).ToList();
             if (matches.Count != 1) return;
 
-            var (isTvShow, year) = matches[0];
-
+            string? year = matches[0].year;
             if (!string.IsNullOrEmpty(year))
                 txtYear.Text = year;
 
             _settingCategoryFromAutoDetect = true;
-            if (isTvShow)
-                rdoTvShow.Checked = true;
-            else
-                rdoMovie.Checked = true;
+            rdoTvShow.Checked = true;
             _settingCategoryFromAutoDetect = false;
         }
 

@@ -156,7 +156,7 @@ as shown on <a href="https://www.imdb.com">IMDb</a> or <a href="https://www.them
 Jellyfin and Kodi find the right movie when several have the same title.
 You can write it with 2 or 4 digits: <code>26</code> becomes
 <code>2026</code> when you leave the box, and <code>95</code> becomes
-<code>1995</code>.</li>
+<code>1995</code>. Choosing <strong>Movie</strong> clears the box.</li>
 </ul>
 <h4 id="tv-show">TV Show</h4>
 <p>Choose <strong>TV Show</strong> to save the file in its own folder
@@ -185,22 +185,25 @@ only shown for TV shows.</li>
 <h4 id="automatic-recognition">Automatic Recognition</h4>
 <ul>
 <li>When you leave the <strong>Title</strong> box, FFmpeg Assistant
-looks for a folder with that title in <strong>Movies</strong> and
-<strong>TV Shows</strong>, with or without a year, for example
-<code>My Show (2024)</code>. If it finds exactly one, it chooses
-<strong>Movie</strong> or <strong>TV Show</strong> and fills in
-<strong>Year</strong> for you.</li>
+looks for a folder with that title in <strong>TV Shows</strong>, with or
+without a year, for example <code>My Show (2024)</code>. If it finds
+exactly one, it chooses <strong>TV Show</strong> and fills in
+<strong>Year</strong> for you. Movies are not searched: they are all
+saved directly in the <strong>Movies</strong> folder.</li>
 <li>FFmpeg Assistant remembers which folder under <strong>TV
-Shows</strong> you downloaded each show to. The next time you paste a
-command for the same show while <strong>TV Show</strong> is chosen, or
-choose <strong>TV Show</strong> after pasting it, that folder is chosen
-automatically, and the next episode is suggested. <strong>Title</strong>
-and <strong>Year</strong> are filled in from the folder name. This is
-useful when the command has the wrong name for the show: if it says
-<code>Gränslandet</code> and you changed <strong>Title</strong> to
-<code>Robinson Gränslandet</code> before you downloaded the first
-episode, the next episodes get <code>Robinson Gränslandet</code>
-automatically.</li>
+Shows</strong> you downloaded each show to. When you paste a command for
+a show that has a folder (remembered or with a matching name) and you
+haven’t chosen <strong>Movie</strong> or <strong>TV Show</strong> yet,
+<strong>TV Show</strong> is chosen for you. If you had chosen
+<strong>Movie</strong>, it is left alone: choose <strong>TV
+Show</strong> yourself to get the same result. Either way, that folder
+is chosen automatically, and the next episode is suggested.
+<strong>Title</strong> and <strong>Year</strong> are filled in from the
+folder name. This is useful when the command has the wrong name for the
+show: if it says <code>Gränslandet</code> and you changed
+<strong>Title</strong> to <code>Robinson Gränslandet</code> before you
+downloaded the first episode, the next episodes get
+<code>Robinson Gränslandet</code> automatically.</li>
 </ul>
 <h3 id="enable-watching-while-downloading">Enable Watching While
 Downloading</h3>
@@ -252,12 +255,11 @@ affected.</p>
 <ul>
 <li><strong>Download</strong> starts the download. During a download the
 button is called <strong>Add to Queue</strong>: it adds the next
-download to the <a href="#download-queue">Download Queue</a>. Once a
-command is downloading or in the queue, the button is disabled until you
-change the <strong>Command</strong>, <strong>Folder</strong> or
-<strong>File Name</strong>, so the same video isn’t downloaded twice by
-mistake. If the download fails or you cancel it, the button is enabled
-again, so you can start it again.</li>
+download to the <a href="#download-queue">Download Queue</a>. A command
+that is already downloading or waiting in the queue is refused with a
+message, whatever the folder or file name is: the same download can’t be
+added twice. If the download fails or you cancel it, you can add it
+again.</li>
 <li><strong>Cancel</strong> stops the download. If a partial file was
 saved, you are asked whether to delete it. If more downloads are waiting
 in the queue, you are first asked whether to cancel them too.</li>
@@ -393,7 +395,7 @@ queue.</p>
 <p>FFmpeg Assistant checks each download when you add it, so the
 questions come while you are at the PC: whether to create a missing
 folder, and whether to overwrite a file that already exists. The same
-file can’t be in the queue twice.</p>
+command (or the same file) can’t be in the queue twice.</p>
 <p><strong>Job</strong>, at the right of <strong>Status</strong> and
 <strong>Attempt</strong>, shows which download is running, for example
 <code>2/5</code>. Click it, or choose <strong>Tools &gt; Download
