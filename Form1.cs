@@ -184,6 +184,8 @@ namespace FFmpegAssistant
             txtSeason.Enter += SelectAllOnFocus;
             txtEpisode.Enter += SelectAllOnFocus;
 
+            AttachTextBoxContextMenu(txtOriginalCommand, txtFileName, txtTitle, txtYear, txtSeason, txtEpisode, cboFolder);
+
             // Season/Episode: accept digits only (keyboard path — blocks the character immediately)
             void NumericOnly(object? s, KeyPressEventArgs e)
             {
@@ -2935,6 +2937,125 @@ namespace FFmpegAssistant
             if (txtEpisode.Text.Length > 0 && txtSeason.Text.Length == 0)
                 txtSeason.Text = "1";
             UpdateFileNameFromSeasonEpisode();
+        }
+
+        /// <summary>
+        /// Replaces the default right-click menu of the given text boxes with one shared menu:
+        /// Copy, Paste and Clear and Paste. Both paste items use TextBox.Paste, the same path as Ctrl+V,
+        /// so the TextChanged handlers (auto-select TV Show, digits only) behave identically.
+        /// </summary>
+        private void AttachTextBoxContextMenu(params Control[] boxes)
+        {
+            // Native messages for the edit part of a ComboBox (ComboBox has no Copy/Paste methods)
+            const int WM_COPY = 0x0301, WM_PASTE = 0x0302;
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+            static IntPtr EditHandle(ComboBox cb) => ComboEditWindow.GetEditHandle(cb);
+
+            var menu = new ContextMenuStrip();
+            var miCopy = new ToolStripMenuItem("&Copy") { ShortcutKeyDisplayString = "Ctrl+C" };
+            var miPaste = new ToolStripMenuItem("&Paste") { ShortcutKeyDisplayString = "Ctrl+V" };
+            var miClearPaste = new ToolStripMenuItem("C&lear and Paste");
+            menu.Items.AddRange(new ToolStripItem[] { miCopy, miPaste, new ToolStripSeparator(), miClearPaste });
+
+            Control? Target() => menu.SourceControl;
+            void DoCopy(Control c)
+            {
+                if (c is TextBox t) t.Copy();
+                else if (c is ComboBox cb) SendMessage(EditHandle(cb), WM_COPY, IntPtr.Zero, IntPtr.Zero);
+            }
+            void DoPaste(Control c)
+            {
+                if (c is TextBox t) t.Paste();
+                else if (c is ComboBox cb) SendMessage(EditHandle(cb), WM_PASTE, IntPtr.Zero, IntPtr.Zero);
+            }
+            menu.Opening += (s, e) =>
+            {
+                var c = Target();
+                if (c is not (TextBox or ComboBox)) { e.Cancel = true; return; }
+                bool readOnly = c is TextBox t && t.ReadOnly;
+                int selLength = c is TextBox t2 ? t2.SelectionLength : ((ComboBox)c).SelectionLength;
+                bool canPaste = !readOnly && Clipboard.ContainsText();
+                miCopy.Enabled = selLength > 0;
+                miPaste.Enabled = canPaste;
+                miClearPaste.Enabled = canPaste;
+            };
+            miCopy.Click += (s, e) => { if (Target() is { } c) DoCopy(c); };
+            miPaste.Click += (s, e) => { if (Target() is { } c) DoPaste(c); };
+            miClearPaste.Click += (s, e) =>
+            {
+                if (Target() is not { } c) return;
+                if (c is TextBox t) t.SelectAll(); else ((ComboBox)c).SelectAll();
+                DoPaste(c); // replaces everything in one change
+            };
+
+            foreach (var c in boxes)
+            {
+                if (c is ComboBox cb)
+                    new ComboEditWindow(cb, menu); // a ComboBox ignores ContextMenuStrip over its edit part
+                else
+                    c.ContextMenuStrip = menu;
+            }
+        }
+
+        /// <summary>
+        /// Hooks the edit control inside an editable ComboBox and shows our menu on WM_CONTEXTMENU.
+        /// </summary>
+        private sealed class ComboEditWindow : NativeWindow
+        {
+            private const int WM_CONTEXTMENU = 0x007B;
+            private readonly ComboBox _combo;
+            private readonly ContextMenuStrip _menu;
+
+            [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+            private struct COMBOBOXINFO
+            {
+                public int cbSize;
+                public int rcItemL, rcItemT, rcItemR, rcItemB;
+                public int rcButtonL, rcButtonT, rcButtonR, rcButtonB;
+                public int stateButton;
+                public IntPtr hwndCombo, hwndItem, hwndList;
+            }
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern bool GetComboBoxInfo(IntPtr hwndCombo, ref COMBOBOXINFO info);
+
+            public static IntPtr GetEditHandle(ComboBox cb)
+            {
+                var info = new COMBOBOXINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<COMBOBOXINFO>() };
+                return GetComboBoxInfo(cb.Handle, ref info) ? info.hwndItem : IntPtr.Zero;
+            }
+
+            public ComboEditWindow(ComboBox combo, ContextMenuStrip menu)
+            {
+                _combo = combo;
+                _menu = menu;
+                combo.HandleCreated += (s, e) => Hook();
+                combo.HandleDestroyed += (s, e) => ReleaseHandle();
+                if (combo.IsHandleCreated) Hook();
+            }
+
+            private void Hook()
+            {
+                ReleaseHandle();
+                IntPtr h = GetEditHandle(_combo);
+                if (h != IntPtr.Zero) AssignHandle(h);
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == WM_CONTEXTMENU)
+                {
+                    _combo.Focus();
+                    // lParam is -1 when opened with the keyboard (menu key): use the lower left of the box
+                    Point screen = (long)m.LParam == -1
+                        ? _combo.PointToScreen(new Point(0, _combo.Height))
+                        : Cursor.Position;
+                    _menu.Show(_combo, _combo.PointToClient(screen));
+                    return;
+                }
+                base.WndProc(ref m);
+            }
         }
 
         /// <summary>
