@@ -96,7 +96,7 @@ leave the box.
   `-c:v`, `-vf` or `-map`) is left as it is.
 - Commands for files on your computer are never changed.
 
-You can turn this off with **Add -c copy to Stream and URL Commands** in the
+You can turn this off with **Add "-c copy" to Stream and URL Commands** in the
 [settings](#options).
 
 ### Folder and File Name
@@ -203,7 +203,7 @@ MP4):
 
 *(new in version 1.6.0)*
 
-This box is hidden by default. To see it, check **Show Save Subtitles as Separate Files** in the
+This box is hidden by default. To see it, check **Show Checkbox "Save Subtitles as Separate Files"** in the
 [settings](#options).
 
 Check **Save Subtitles as Separate Files** to save the subtitles that are stored inside the
@@ -464,12 +464,12 @@ to create it.
 
 ### Options
 
-**Show Save Subtitles as Separate Files** *(new in version 1.6.0)*: check it to show the
+**Show Checkbox "Save Subtitles as Separate Files"** *(new in version 1.6.0)*: check it to show the
 [Save Subtitles as Separate Files](#save-subtitles-as-separate-files) box in the main window.
 It is off by default. When you turn it off again, the box is hidden and unchecked, so no subtitle
 files are saved.
 
-**Add -c copy to Stream and URL Commands** *(new in version 1.7.0)*: on by default. FFmpeg
+**Add "-c copy" to Stream and URL Commands** *(new in version 1.7.0)*: on by default. FFmpeg
 Assistant adds `-c copy` to a pasted stream command that has no codec options, so the video is
 copied instead of re-encoded. See [Adding `-c copy` Automatically](#adding--c-copy-automatically).
 

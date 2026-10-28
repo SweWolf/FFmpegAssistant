@@ -42,8 +42,8 @@ namespace FFmpegAssistant
             txtExtraFolders = new TextBox();
             lblExtraFoldersHint = new Label();
             groupBox4 = new GroupBox();
-            chkAddCopyCodec = new CheckBox();
             chkShowSaveSubtitlesAsSeparateFiles = new CheckBox();
+            chkAddCopyCodec = new CheckBox();
             grpFfmpeg.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
@@ -337,9 +337,9 @@ namespace FFmpegAssistant
             chkShowSaveSubtitlesAsSeparateFiles.AutoSize = true;
             chkShowSaveSubtitlesAsSeparateFiles.Location = new Point(10, 22);
             chkShowSaveSubtitlesAsSeparateFiles.Name = "chkShowSaveSubtitlesAsSeparateFiles";
-            chkShowSaveSubtitlesAsSeparateFiles.Size = new Size(218, 19);
+            chkShowSaveSubtitlesAsSeparateFiles.Size = new Size(283, 19);
             chkShowSaveSubtitlesAsSeparateFiles.TabIndex = 0;
-            chkShowSaveSubtitlesAsSeparateFiles.Text = "Show Save Subtitles as Separate Files";
+            chkShowSaveSubtitlesAsSeparateFiles.Text = "Show Checkbox \"Save Subtitles as Separate Files\"";
             chkShowSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
             // 
             // chkAddCopyCodec
@@ -347,9 +347,9 @@ namespace FFmpegAssistant
             chkAddCopyCodec.AutoSize = true;
             chkAddCopyCodec.Location = new Point(10, 47);
             chkAddCopyCodec.Name = "chkAddCopyCodec";
-            chkAddCopyCodec.Size = new Size(300, 19);
+            chkAddCopyCodec.Size = new Size(267, 19);
             chkAddCopyCodec.TabIndex = 1;
-            chkAddCopyCodec.Text = "Add -c copy to Stream and URL Commands";
+            chkAddCopyCodec.Text = "Add \"-c copy\" to Stream and URL Commands";
             chkAddCopyCodec.UseVisualStyleBackColor = true;
             // 
             // SettingsForm
