@@ -31,6 +31,11 @@ namespace FFmpegAssistant
         private bool _settingExtractCommand;
         private string? _folderTextOnFocus;
         private bool _downloadRunning; // from the Download click until the run has ended, including the M3U8 pre-fetch
+        private string? _copyCodecHandledInput; // input (URL) for which "-c copy" was already added or removed by the user
+        private int _lastCommandLength;         // length of the command box text at its last change, to tell a paste from typing
+        private bool _watchDownloadRunning;    // FFmpeg is downloading in watch mode: the Cancel button is "Stop Download"
+        private CancellationTokenSource? _stopCts; // cancelled by "Stop Download": FFmpeg is told to finish and close the file
+        private bool _stopRequested;            // the user clicked "Stop Download": convert or keep the .ts file instead of cancelling
         private bool _runInWatchMode;  // the running download was started with "Enable Watching While Downloading"
 
         // Download queue: while downloads run, Download becomes "Add to Queue" (see RunQueueAsync)
@@ -92,7 +97,8 @@ namespace FFmpegAssistant
             new(@"Duration:\s*(\d{2}):(\d{2}):(\d{2})\.(\d+)", RegexOptions.Compiled);
 
         private static readonly Regex ProgressPattern =
-            new(@"frame=\s*(\d+)\s+fps=\s*(\S+)\s+q=\S+\s+size=\s*(\S+)\s+time=(\d{2}:\d{2}:\d{2}\.\d+)\s+bitrate=(\S+)\s+speed=(\S+)(?:\s+elapsed=(\S+))?",
+            // FFmpeg pads its values to a fixed width ("speed= 155x", "bitrate= 640.9kbits/s"): spaces are allowed after every "="
+            new(@"frame=\s*(\d+)\s+fps=\s*(\S+)\s+q=\s*\S+\s+size=\s*(\S+)\s+time=\s*(\d{2}:\d{2}:\d{2}\.\d+)\s+bitrate=\s*(\S+)\s+speed=\s*(\S+)(?:\s+elapsed=\s*(\S+))?",
                 RegexOptions.Compiled);
 
         private static readonly Regex EpisodePattern =
@@ -185,6 +191,7 @@ namespace FFmpegAssistant
             txtEpisode.Enter += SelectAllOnFocus;
 
             AttachTextBoxContextMenu(txtOriginalCommand, txtFileName, txtTitle, txtYear, txtSeason, txtEpisode, cboFolder);
+            AttachSiblingAppMenus();
 
             // Season/Episode: accept digits only (keyboard path — blocks the character immediately)
             void NumericOnly(object? s, KeyPressEventArgs e)
@@ -197,6 +204,19 @@ namespace FFmpegAssistant
 
             // Season/Episode: wire up the TextChanged handlers (paste path is handled there too)
             txtEpisode.TextChanged += txtEpisode_TextChanged;
+
+            // "-c copy" is added to a pasted stream/URL command (a jump in length means a paste or a
+            // programmatic change, not typing); typed commands get it when the box loses focus.
+            txtOriginalCommand.TextChanged += (s, _) =>
+            {
+                int length = txtOriginalCommand.TextLength;
+                bool jumped = Math.Abs(length - _lastCommandLength) > 1;
+                _lastCommandLength = length;
+                if (length == 0)
+                    _copyCodecHandledInput = null; // cleared: the next command is a new start
+                else if (jumped)
+                    TryAddCopyCodec();
+            };
 
             // Auto-apply TV show history as soon as a complete-looking FFmpeg command is pasted.
             // Also auto-wrap bare URLs and local M3U8 file paths into a full ffmpeg command.
@@ -235,6 +255,7 @@ namespace FFmpegAssistant
             // Also trigger when the box loses focus (catches manual edits)
             txtOriginalCommand.Leave += (s, _) =>
             {
+                TryAddCopyCodec();
                 if (!IsValidationCommandShown(txtOriginalCommand.Text.Trim()))
                     TryApplyTvShowHistory(txtOriginalCommand.Text.Trim(), setTitle: false);
             };
@@ -780,6 +801,82 @@ namespace FFmpegAssistant
             return $"{mb:F1} MB";
         }
 
+        /// <summary>What a decode check found: the file's length and each error line with the time it was found at.</summary>
+        private sealed class DecodeReport
+        {
+            public TimeSpan? Duration;
+            public List<(TimeSpan? At, string Line)> Errors { get; } = new();
+        }
+
+        private static readonly Regex ProgressTimeRegex = new(@"^\s*frame=.*?\btime=(\d+):(\d{2}):(\d{2}(?:\.\d+)?)", RegexOptions.Compiled);
+        private static readonly Regex DurationRegex = new(@"Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)", RegexOptions.Compiled);
+
+        private static TimeSpan? ParseProgressTime(string line) => ParseClock(ProgressTimeRegex.Match(line));
+
+        private static TimeSpan? ParseFfmpegDuration(string line) => ParseClock(DurationRegex.Match(line));
+
+        private static TimeSpan? ParseClock(Match m) => !m.Success ? null :
+            new TimeSpan(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), 0)
+                + TimeSpan.FromSeconds(double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture));
+
+        /// <summary>
+        /// The places in the file where decoding went wrong: error lines found at the same point (the
+        /// "error while decoding" line and the "concealing" line that follows it) count as one place.
+        /// </summary>
+        private static List<TimeSpan?> GetProblemSpots(DecodeReport report)
+        {
+            var spots = new List<TimeSpan?>();
+            foreach (var (at, _) in report.Errors)
+            {
+                if (spots.Count > 0 && (at == spots[^1] ||
+                    (at != null && spots[^1] != null && at.Value - spots[^1]!.Value < TimeSpan.FromSeconds(2))))
+                    continue;
+                spots.Add(at);
+            }
+            return spots;
+        }
+
+        /// <summary>
+        /// A clear result for Tools > Validate Video File: how many places in the file have decoding problems
+        /// and about where (to a few seconds: FFmpeg reports its progress at intervals). Null when the report
+        /// has no errors (the plain "corrupted or unreadable" message is used then).
+        /// </summary>
+        private static string? DescribeProblems(DecodeReport report)
+        {
+            var spots = GetProblemSpots(report);
+            if (spots.Count == 0) return null;
+
+            string At(TimeSpan? t) => t == null ? "the start" : $"about {FormatClock(t.Value)}";
+            string noun = spots.Count == 1 ? "1 decoding problem" : $"{spots.Count} decoding problems";
+            string where = spots.Count switch
+            {
+                1 => $"at {At(spots[0])}",
+                <= 5 => "at " + string.Join(", ", spots.Take(spots.Count - 1).Select(At)) + " and " + At(spots[^1]),
+                _ => $"first at {At(spots[0])}, last at {At(spots[^1])}"
+            };
+            string text = $"The video file has {noun}, {where}";
+            if (report.Duration is TimeSpan len)
+            {
+                text += $" (the file is {FormatClock(len)} long)";
+                if (spots.Count == 1 && spots[0] is TimeSpan only && len - only < TimeSpan.FromSeconds(5))
+                    text += ". It is at the very end, as when a stream was stopped";
+            }
+            return text + ". See the log file for details.";
+        }
+
+        /// <summary>Adds the places of the problems to the end of the validation's log file.</summary>
+        private static void AppendProblemSummary(string logFile, DecodeReport report)
+        {
+            try
+            {
+                var lines = new List<string> { "", "Decoding problems found by FFmpeg Assistant (the time is the last progress report before the error):" };
+                foreach (var (at, line) in report.Errors)
+                    lines.Add($"  {(at == null ? "start" : FormatClock(at.Value))}  {line}");
+                File.AppendAllLines(logFile, lines, System.Text.Encoding.UTF8);
+            }
+            catch { /* never let logging crash the app */ }
+        }
+
         private static bool IsErrorLine(string line)
         {
             // Skip progress lines — they won't contain real errors
@@ -1111,6 +1208,7 @@ namespace FFmpegAssistant
             if (!_queueRunning)
                 ClearStatus();
 
+            TryAddCopyCodec(); // a typed command that never lost focus (e.g. Enter)
             string originalCommand = txtOriginalCommand.Text.Trim();
             string folder = cboFolder.Text.Trim();
             string fileName = txtFileName.Text.Trim();
@@ -1168,7 +1266,8 @@ namespace FFmpegAssistant
                     string rawArg = lastArg.Value.Trim().Trim('"');
                     if (rawArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                         rawArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-                        IsLocalM3u8Path(rawArg))
+                        IsLocalM3u8Path(rawArg) ||
+                        LastArgIsInput(originalCommand, lastArg)) // e.g. "... -c copy": "copy" is no file name
                     {
                         // No explicit output filename — use M3U8 content type to pick a sensible default
                         fileName = m3u8Info.Type == M3u8ContentType.Subtitle ? "subtitles.srt" : "output.mp4";
@@ -1312,6 +1411,7 @@ namespace FFmpegAssistant
             bool isSrt = job.IsSrt;
             bool watchMode = job.WatchMode;
             _runInWatchMode = watchMode;
+            _stopRequested = false;
             _m3u8ContentType = job.M3u8Type;
             _totalM3u8Segments = job.M3u8SegmentCount;
             _m3u8SegmentsOpened = 0;
@@ -1365,12 +1465,31 @@ namespace FFmpegAssistant
                     // Set download path early so Open File can activate as soon as the file appears
                     _lastOutputPath = downloadPath;
 
-                    var (exitCode, errorLines) = await RunFfmpegAsync(currentArguments, logFile, _cts.Token);
+                    // In watch mode the Cancel button is "Stop Download": a stream has no end, and stopping is how it ends
+                    _watchDownloadRunning = watchMode;
+                    _stopCts = watchMode ? new CancellationTokenSource() : null;
+                    UpdateCancelButtonText();
+                    (int ExitCode, List<string> ErrorLines) ffmpegRun;
+                    try { ffmpegRun = await RunFfmpegAsync(currentArguments, logFile, _cts.Token, gracefulStop: _stopCts?.Token ?? default); }
+                    finally
+                    {
+                        _watchDownloadRunning = false;
+                        _stopCts?.Dispose();
+                        _stopCts = null;
+                        UpdateCancelButtonText();
+                    }
+                    var (exitCode, errorLines) = ffmpegRun;
 
                     // Watch mode: the .ts can be opened; normal mode: wait until the file is validated and renamed
                     btnOpenFile.Enabled = watchMode && File.Exists(downloadPath);
 
-                    if (exitCode != 0)
+                    if (_stopRequested)
+                    {
+                        // "Stop Download" in watch mode: FFmpeg stopped cleanly, the .ts file is what was downloaded so far
+                        _stopRequested = false;
+                        (outcome, reason) = await FinishStoppedWatchDownloadAsync(downloadPath, outputPath, logFile);
+                    }
+                    else if (exitCode != 0)
                     {
                         string details = errorLines.Count > 0
                             ? string.Join("\n", errorLines.TakeLast(6))
@@ -1821,9 +1940,123 @@ namespace FFmpegAssistant
                 _cancelQueue = answer == DialogResult.Yes;
             }
 
-            _cts?.Cancel();
+            if (_watchDownloadRunning)
+            {
+                // Stop Download: FFmpeg finishes and closes the .ts file, then the download is wrapped up
+                _stopRequested = true;
+                SetStatus("Stopping...");
+                _stopCts?.Cancel();
+            }
+            else
+            {
+                _cts?.Cancel();
+            }
             btnCancel.Enabled = false;
             btnClear.Enabled = true;
+        }
+
+        private void UpdateCancelButtonText()
+        {
+            btnCancel.Text = _watchDownloadRunning ? "Stop Download" : "Cancel";
+            toolTip1.SetToolTip(btnCancel, _watchDownloadRunning
+                ? "Stop the stream and keep what has been downloaded so far. You can then convert it to a video file."
+                : "Cancel the download in progress, or the whole queue");
+        }
+
+        /// <summary>
+        /// A download in watch mode that the user stopped (the .ts file is playable as it is): asks whether to
+        /// convert it to the final format. After a successful conversion the .ts file is deleted; if the user
+        /// doesn't want to convert, they choose whether to keep the .ts file.
+        /// </summary>
+        private async Task<(QueueStatus Outcome, string? Reason)> FinishStoppedWatchDownloadAsync(
+            string downloadPath, string outputPath, string logFile)
+        {
+            progressBar.Value = 0;
+            lblEstimatedRemaining.Text = "Estimated remaining time: —";
+            TaskbarProgress.Clear(this);
+            WriteAppLog("RESULT   : STOPPED by user");
+
+            if (!File.Exists(downloadPath) || new FileInfo(downloadPath).Length == 0)
+            {
+                try { File.Delete(downloadPath); } catch { }
+                SetStatus("Stopped — nothing was downloaded.");
+                return (QueueStatus.Cancelled, null);
+            }
+
+            string finalExt = Path.GetExtension(outputPath).TrimStart('.');
+            var convertAnswer = MessageBox.Show(
+                $"The download was stopped.\n\nDo you want to convert the downloaded video to {finalExt.ToUpperInvariant()}?\n\n" +
+                "Yes: convert it and delete the .ts file.\n" +
+                "No: don't convert it.",
+                AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (convertAnswer == DialogResult.Yes)
+            {
+                SetStatus($"Converting to {finalExt}...");
+                TaskbarProgress.SetIndeterminate(this);
+                WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");
+                _cts.Dispose();
+                _cts = new CancellationTokenSource();
+                btnCancel.Enabled = true; // Cancel stops the conversion; the .ts file is kept
+                try
+                {
+                    string convArgs = $"-y -i \"{downloadPath}\" -c copy \"{outputPath}\"";
+                    var (convCode, _) = await RunFfmpegAsync(convArgs, logFile, _cts.Token, appendToLog: true);
+                    TaskbarProgress.Clear(this);
+                    if (convCode == 0)
+                    {
+                        try { File.Delete(downloadPath); } catch { }
+                        WriteAppLog("CONVERT  : SUCCESS — .ts file deleted");
+                        _lastOutputPath = outputPath;
+                        btnOpenFile.Enabled = File.Exists(outputPath);
+                        progressBar.Value = 100;
+                        lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                        SetStatus("Done", StatusLevel.Success);
+                        return (QueueStatus.Done, null);
+                    }
+
+                    WriteAppLog($"CONVERT  : FAILED (exit code {convCode})");
+                    SetStatus("Conversion failed — .ts file kept.", StatusLevel.Error);
+                    if (!IsQueueRun)
+                    {
+                        TaskbarFlash.FlashIfInactive(this);
+                        MessageBox.Show($"The conversion to {finalExt} failed.\n\nThe .ts file was kept:\n{downloadPath}",
+                            AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    return (QueueStatus.Failed, $"the conversion to {finalExt} failed (the .ts file was kept)");
+                }
+                catch (OperationCanceledException)
+                {
+                    TaskbarProgress.Clear(this);
+                    WriteAppLog("CONVERT  : CANCELLED by user — .ts file kept");
+                    try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { }
+                    SetStatus("Conversion cancelled — .ts file kept.");
+                    return (QueueStatus.Cancelled, null);
+                }
+            }
+
+            var keepAnswer = MessageBox.Show(
+                $"Do you want to keep the .ts file?\n\n{downloadPath}",
+                AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (keepAnswer == DialogResult.Yes)
+            {
+                WriteAppLog("CLEANUP  : .ts file kept by user");
+                SetStatus("Stopped — .ts file kept.");
+                return (QueueStatus.Done, null);
+            }
+
+            try
+            {
+                File.Delete(downloadPath);
+                WriteAppLog("CLEANUP  : .ts file deleted by user");
+                SetStatus("Stopped — .ts file deleted.");
+            }
+            catch (Exception ex)
+            {
+                WriteAppLog($"CLEANUP  : Failed to delete .ts file — {ex.Message}");
+                SetStatus("Stopped — could not delete the .ts file.");
+            }
+            return (QueueStatus.Cancelled, null);
         }
 
         private void btnOpenFile_Click_1(object sender, EventArgs e)
@@ -1833,7 +2066,35 @@ namespace FFmpegAssistant
                 MessageBox.Show("The downloaded file was not found.", AppTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+            // SweWolf Media Player when it is there, else the program Windows has for the file
+            string? player = SiblingApps.FindMediaPlayer();
+            if (player != null && SiblingApps.Start(player, _lastOutputPath)) return;
+            OpenFileInAssociatedApp();
+        }
+
+        private void OpenFileInAssociatedApp()
+        {
+            if (_lastOutputPath == null || !File.Exists(_lastOutputPath)) return;
             Process.Start(new ProcessStartInfo(_lastOutputPath) { UseShellExecute = true });
+        }
+
+        // Open File and Open Folder go to the sibling apps when they are installed; the right-click menu of
+        // each button then offers the classic way (the program Windows has for the file, Windows File Explorer).
+        // The menu is only there for a button whose sibling app exists.
+        private void AttachSiblingAppMenus()
+        {
+            if (SiblingApps.FindMediaPlayer() != null)
+            {
+                var menu = new ContextMenuStrip();
+                menu.Items.Add("Open File in the Associated Application", null, (_, _) => OpenFileInAssociatedApp());
+                btnOpenFile.ContextMenuStrip = menu;
+            }
+            if (SiblingApps.FindFileExplorer() != null)
+            {
+                var menu = new ContextMenuStrip();
+                menu.Items.Add("Open Folder in Windows File Explorer", null, (_, _) => OpenFolder(useSiblingApp: false));
+                btnOpenFolder.ContextMenuStrip = menu;
+            }
         }
 
         private void btnClear_Click(object sender, EventArgs e) => ClearForm();
@@ -1875,7 +2136,9 @@ namespace FFmpegAssistant
             txtOriginalCommand.Focus();
         }
 
-        private void btnOpenFolder_Click_1(object sender, EventArgs e)
+        private void btnOpenFolder_Click_1(object sender, EventArgs e) => OpenFolder(useSiblingApp: true);
+
+        private void OpenFolder(bool useSiblingApp)
         {
             // During a download or validation: the running job's folder, not what the fields show now
             // (they stay editable to prepare the next download, and auto-suggest may change them).
@@ -1899,19 +2162,24 @@ namespace FFmpegAssistant
                 return;
             }
 
-            // If the file already exists, open Explorer with it pre-selected
+            string? existingFile = null;
             if (!string.IsNullOrEmpty(fileName))
             {
                 string candidate = Path.Combine(folder, fileName);
                 if (File.Exists(candidate))
-                {
-                    Process.Start("explorer.exe", $"/select,\"{candidate}\"");
-                    return;
-                }
+                    existingFile = candidate;
             }
 
-            // File doesn't exist yet — just open the folder
-            Process.Start("explorer.exe", $"\"{folder}\"");
+            // SweWolf File Explorer when it is there: a file on its command line is selected in its folder,
+            // a folder becomes the root of its tree
+            string? explorer = useSiblingApp ? SiblingApps.FindFileExplorer() : null;
+            if (explorer != null && SiblingApps.Start(explorer, existingFile ?? folder)) return;
+
+            // If the file already exists, open Windows File Explorer with it pre-selected
+            if (existingFile != null)
+                Process.Start("explorer.exe", $"/select,\"{existingFile}\"");
+            else
+                Process.Start("explorer.exe", $"\"{folder}\""); // File doesn't exist yet — just open the folder
         }
 
         private void menuViewHelp_Click(object? sender, EventArgs e) => HelpFiles.OpenHelp(AppTitle);
@@ -1991,7 +2259,10 @@ namespace FFmpegAssistant
         }
 
         /// <summary>FFmpeg arguments that validate a file: decode everything, write nothing.</summary>
-        private static string ValidationArguments(string filePath) => $"-i \"{filePath}\" -f null -";
+        private static string ValidationArguments(string filePath, bool detailed = false) =>
+            // detailed: FFmpeg reports its progress every 0.05 s (the default is 0.5 s, which at decoding speed
+            // is half a minute of video), so the places of the errors can be told to a few seconds
+            (detailed ? "-stats_period 0.05 " : "") + $"-i \"{filePath}\" -f null -";
 
         /// <summary>
         /// True if the Command box still shows the last validation's command (not a download command),
@@ -2017,6 +2288,12 @@ namespace FFmpegAssistant
                          "All files (*.*)|*.*",
                 InitialDirectory = Directory.Exists(folder) ? folder : string.Empty
             };
+            // The file just downloaded (or validated) is the one that is most likely to be checked: pre-fill it
+            if (_lastOutputPath != null && File.Exists(_lastOutputPath))
+            {
+                ofd.InitialDirectory = Path.GetDirectoryName(_lastOutputPath) ?? ofd.InitialDirectory;
+                ofd.FileName = Path.GetFileName(_lastOutputPath);
+            }
             if (ofd.ShowDialog(this) != DialogResult.OK) return;
             string filePath = ofd.FileName;
 
@@ -2025,7 +2302,7 @@ namespace FFmpegAssistant
             // user chose this action, so replacing the boxes is fine. The command is set first, so
             // auto-suggest (which checks for it) leaves Folder and File Name alone.
             ClearForm();
-            _validationCommand = "ffmpeg " + ValidationArguments(filePath);
+            _validationCommand = "ffmpeg " + ValidationArguments(filePath, detailed: true);
             txtOriginalCommand.Text = _validationCommand;
             cboFolder.Text = Path.GetDirectoryName(filePath) ?? string.Empty;
             txtFileName.Text = Path.GetFileName(filePath);
@@ -2058,7 +2335,8 @@ namespace FFmpegAssistant
             using var sleepBlocker = SleepBlocker.Begin();
             try
             {
-                bool valid = await ValidateVideoFileAsync(filePath, logFile, _cts.Token, okIfFfmpegMissing: false);
+                var report = new DecodeReport();
+                bool valid = await ValidateVideoFileAsync(filePath, logFile, _cts.Token, okIfFfmpegMissing: false, report);
                 if (valid)
                 {
                     progressBar.Value = 100;
@@ -2070,8 +2348,12 @@ namespace FFmpegAssistant
                 else
                 {
                     TaskbarProgress.SetError(this, 100, 100);
-                    WriteAppLog("VALIDATE : FAILED — file is corrupted or unreadable");
-                    SetStatus("The video file is corrupted or unreadable. See the log file for details.", StatusLevel.Error);
+                    progressBar.Value = 100;
+                    lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
+                    string? problems = DescribeProblems(report);
+                    WriteAppLog($"VALIDATE : FAILED — {problems ?? "file is corrupted or unreadable"}");
+                    if (problems != null) AppendProblemSummary(logFile, report);
+                    SetStatus(problems ?? "The video file is corrupted or unreadable. See the log file for details.", StatusLevel.Error);
                 }
                 TaskbarFlash.FlashIfInactive(this);
             }
@@ -2505,6 +2787,58 @@ namespace FFmpegAssistant
              s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) &&
             !s.Contains(' ');
 
+        // Options that mean the user wants to re-encode or pick streams: then "-c copy" is not added.
+        private static readonly Regex ReencodeOptionRegex = new(
+            @"(^|\s)-(c|codec|vcodec|acodec|scodec|vf|af|filter\S*|filter_complex|crf|preset|map|an|vn|sn|s|r|b|q|qscale)(:\S+)?(?=\s|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Output file types that "-c copy" can be inserted in front of
+        private static readonly string[] CopyOutputExtensions = { ".mp4", ".mkv", ".ts", ".mov", ".m4v" };
+
+        // The first input of an FFmpeg command when it is a stream or a URL (http/https or a .m3u8 playlist), else null.
+        private static string? GetStreamInput(string command)
+        {
+            if (!command.StartsWith("ffmpeg ", StringComparison.OrdinalIgnoreCase)) return null;
+            var m = Regex.Match(command, @"(^|\s)-i\s+(""[^""]*""|\S+)");
+            if (!m.Success) return null;
+            string input = m.Groups[2].Value.Trim('"');
+            bool isStream = input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                            input.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                            input.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+                            input.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase);
+            return isStream ? input : null;
+        }
+
+        // Returns the command with "-c copy" added (at the end, or in front of an output file), or null when
+        // it should be left alone: it has codec/filter/map options of its own, or its end is not recognizable.
+        private static string? InsertCopyCodec(string command)
+        {
+            if (ReencodeOptionRegex.IsMatch(command)) return null;
+            var last = Regex.Match(command, @"(""[^""]*""|[^\s]+)\s*$");
+            if (!last.Success) return null;
+            if (LastArgIsInput(command, last))
+                return command.TrimEnd() + " -c copy";
+            string ext = Path.GetExtension(last.Value.Trim().Trim('"'));
+            if (!CopyOutputExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase)) return null;
+            return command[..last.Index] + "-c copy " + command[last.Index..];
+        }
+
+        // Adds "-c copy" to a stream/URL command once per input: if the user removes it, it stays removed
+        // until another input (URL) is entered or the box is cleared.
+        private void TryAddCopyCodec()
+        {
+            if (!AppSettings.AddCopyCodec) return;
+            string command = txtOriginalCommand.Text.Trim();
+            if (IsValidationCommandShown(command) || _commandSetByExtractFeature) return;
+            string? input = GetStreamInput(command);
+            if (input == null || string.Equals(input, _copyCodecHandledInput, StringComparison.OrdinalIgnoreCase))
+                return;
+            _copyCodecHandledInput = input;
+            string? withCopy = InsertCopyCodec(command);
+            if (withCopy != null)
+                txtOriginalCommand.Text = withCopy;
+        }
+
         // Returns true for a bare local file path to an M3U8 playlist (quoted or unquoted)
         private static bool IsLocalM3u8Path(string s)
         {
@@ -2571,9 +2905,11 @@ namespace FFmpegAssistant
             if (lastArg.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                 lastArg.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 return true;
-            // Check whether the text before this arg ends with "-i"
-            return command[..lastArgMatch.Index].TrimEnd()
-                .EndsWith("-i", StringComparison.OrdinalIgnoreCase);
+            // Check whether the text before this arg ends with "-i", or with a codec option
+            // ("... -c copy"): then the last arg is that option's value, not an output file.
+            string before = command[..lastArgMatch.Index].TrimEnd();
+            return before.EndsWith("-i", StringComparison.OrdinalIgnoreCase) ||
+                   Regex.IsMatch(before, @"(^|\s)-(c|codec|vcodec|acodec|scodec)(:\S+)?$", RegexOptions.IgnoreCase);
         }
 
         /// <summary>
@@ -2584,7 +2920,7 @@ namespace FFmpegAssistant
         /// </summary>
         private async Task<(int ExitCode, List<string> ErrorLines)> RunFfmpegAsync(
             string arguments, string? logFile, CancellationToken cancellationToken = default, bool appendToLog = false,
-            bool showProgress = true)
+            bool showProgress = true, DecodeReport? report = null, CancellationToken gracefulStop = default)
         {
             var psi = new ProcessStartInfo(AppSettings.GetFfmpegExe(), arguments)
             {
@@ -2600,6 +2936,7 @@ namespace FFmpegAssistant
                 : new StreamWriter(logFile, appendToLog, System.Text.Encoding.UTF8) { AutoFlush = true };
             var writerLock = new object();
             var errorLines = new List<string>();
+            TimeSpan? lastProgressTime = null;
 
             void HandleLine(string? line)
             {
@@ -2607,8 +2944,18 @@ namespace FFmpegAssistant
                 lock (writerLock)
                 {
                     writer?.WriteLine(line);
-                    if (IsErrorLine(line))
+                    bool isError = IsErrorLine(line);
+                    if (isError)
                         errorLines.Add(line.Trim());
+                    if (report != null)
+                    {
+                        // Where in the file an error is: the time of the last progress line before it
+                        report.Duration ??= ParseFfmpegDuration(line);
+                        if (isError)
+                            report.Errors.Add((lastProgressTime, line.Trim()));
+                        else if (ParseProgressTime(line) is TimeSpan t)
+                            lastProgressTime = t;
+                    }
                 }
                 if (showProgress) ProcessOutputLine(line);
             }
@@ -2617,7 +2964,28 @@ namespace FFmpegAssistant
             process.ErrorDataReceived += (_, e) => HandleLine(e.Data);
 
             process.Start();
-            process.StandardInput.Close();
+            // FFmpeg is stopped gracefully by sending it "q": it then finishes the picture it is writing and
+            // closes the file cleanly. (Killing it cuts the last picture, which shows as a decoding error.)
+            // Without a graceful stop the input is closed at once, so FFmpeg never waits for it.
+            using var stopRegistration = gracefulStop.CanBeCanceled
+                ? gracefulStop.Register(() =>
+                {
+                    try
+                    {
+                        process.StandardInput.Write("q");
+                        process.StandardInput.Flush();
+                    }
+                    catch { /* it has already exited */ }
+                    // If it does not stop (a stuck connection), kill it after 15 seconds
+                    _ = Task.Delay(TimeSpan.FromSeconds(15)).ContinueWith(_ =>
+                    {
+                        try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                        catch { /* gone already */ }
+                    });
+                })
+                : default;
+            if (!gracefulStop.CanBeCanceled)
+                process.StandardInput.Close();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
@@ -2652,7 +3020,7 @@ namespace FFmpegAssistant
         /// (don't report a good download as broken), false for Tools > Validate Video File (rethrows).
         /// </summary>
         private async Task<bool> ValidateVideoFileAsync(string filePath, string? logFile, CancellationToken cancellationToken,
-                                                        bool okIfFfmpegMissing = true)
+                                                        bool okIfFfmpegMissing = true, DecodeReport? report = null)
         {
             if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
                 return false;
@@ -2660,7 +3028,7 @@ namespace FFmpegAssistant
             try
             {
                 var (exitCode, errorLines) = await RunFfmpegAsync(
-                    ValidationArguments(filePath), logFile, cancellationToken);
+                    ValidationArguments(filePath, detailed: report != null), logFile, cancellationToken, report: report);
                 return exitCode == 0 && errorLines.Count == 0;
             }
             catch (Exception ex) when (ex is not OperationCanceledException && okIfFfmpegMissing)
@@ -2803,6 +3171,7 @@ namespace FFmpegAssistant
 
         private void SuggestNextEpisode(string folder)
         {
+            if (!rdoTvShow.Checked) return; // episode names only for TV shows (chosen by the user, or auto-selected)
             if (_commandSetByExtractFeature) return;
             if (IsValidationCommandShown(txtOriginalCommand.Text.Trim())) return; // Folder/File Name show the validated file
 

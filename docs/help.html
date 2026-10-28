@@ -116,6 +116,27 @@ on your computer. FFmpeg Assistant turns it into a full command for you:
 <p>You don’t need to change the output file name at the end of the
 command: FFmpeg Assistant replaces it with the <strong>Folder</strong>
 and <strong>File Name</strong> you choose.</p>
+<h4 id="adding--c-copy-automatically">Adding <code>-c copy</code>
+Automatically</h4>
+<p><em>(new in version 1.7.0)</em></p>
+<p>Without codec options, FFmpeg re-encodes the video. For a stream this
+lowers the quality and can be too slow to keep up. When you paste a
+command or a web address for a stream (an <code>http</code> or
+<code>https</code> address, or an <code>.m3u8</code> playlist), FFmpeg
+Assistant therefore adds <code>-c copy</code> to the command, so the
+video and audio are copied as they are. A command you type is checked
+when you leave the box.</p>
+<ul>
+<li>It is added only once for each address. If you delete
+<code>-c copy</code> yourself, it is not added again until you enter
+another address or clear the box.</li>
+<li>A command that already has its own options for codecs, filters or
+stream selection (for example <code>-c:v</code>, <code>-vf</code> or
+<code>-map</code>) is left as it is.</li>
+<li>Commands for files on your computer are never changed.</li>
+</ul>
+<p>You can turn this off with <strong>Add -c copy to Stream and URL
+Commands</strong> in the <a href="#options">settings</a>.</p>
 <h3 id="folder-and-file-name">Folder and File Name</h3>
 <p><strong>Folder</strong> is where the file is saved. The list contains
 your <strong>Videos</strong> folder and its <strong>Movies</strong> and
@@ -221,11 +242,29 @@ finished, because you are already watching. If you uncheck the box
 before the download is finished, you get the usual notification. Errors
 are always shown.</p>
 <p>This option is not used for subtitle files.</p>
+<h4 id="stopping-a-stream">Stopping a Stream</h4>
+<p><em>(new in version 1.7.0)</em></p>
+<p>A stream never ends by itself. While a download in this mode is
+running, the <strong>Cancel</strong> button is called <strong>Stop
+Download</strong>. FFmpeg is asked to finish the picture it is working
+on and close the file properly, which can take a few seconds, so the end
+of the video is not cut off. Then FFmpeg Assistant asks if you want to
+convert what has been downloaded to the final format (for example
+MP4):</p>
+<ul>
+<li><strong>Yes</strong>: the video is converted, and the
+<code>.ts</code> file is deleted when the conversion has worked. If the
+conversion fails, the <code>.ts</code> file is kept. Click
+<strong>Cancel</strong> during the conversion to stop it: the
+<code>.ts</code> file is kept.</li>
+<li><strong>No</strong>: you are asked if you want to keep the
+<code>.ts</code> file.</li>
+</ul>
 <h3 id="save-subtitles-as-separate-files">Save Subtitles as Separate
 Files</h3>
 <p><em>(new in version 1.6.0)</em></p>
 <p>This box is hidden by default. To see it, check <strong>Show Save
-Subtitles as Separate Files</strong> in the <a href="#show-save-subtitles-as-separate-files">settings</a>.</p>
+Subtitles as Separate Files</strong> in the <a href="#options">settings</a>.</p>
 <p>Check <strong>Save Subtitles as Separate Files</strong> to save the
 subtitles that are stored inside the downloaded video as
 <code>.srt</code> files in the same folder. Some players and TVs only
@@ -261,19 +300,29 @@ message, whatever the folder or file name is: the same download can’t be
 added twice. If the download fails or you cancel it, you can add it
 again.</li>
 <li><strong>Cancel</strong> stops the download. If a partial file was
-saved, you are asked whether to delete it. If more downloads are waiting
-in the queue, you are first asked whether to cancel them too.</li>
+saved, you are asked whether to delete it. In watch mode the button is
+called <strong>Stop Download</strong>; see <a href="#stopping-a-stream">Stopping a Stream</a>. If more downloads are
+waiting in the queue, you are first asked whether to cancel them
+too.</li>
 <li><strong>Clear</strong> empties all the boxes, so you can start over.
 During a download it only empties the boxes: the progress of the running
 download stays.</li>
-<li><strong>Open File</strong> opens the downloaded file in your default
-video player.</li>
-<li><strong>Open Folder</strong> opens the folder in File Explorer, with
-the file selected if it exists. During a download, it opens the folder
-of the running download.</li>
-<li><strong>Open Log File</strong> shows FFmpeg’s report of the
-download. Useful when something went wrong.</li>
+<li><strong>Open File</strong> opens the downloaded file in SweWolf
+Media Player if you have it, otherwise in your default video
+player.</li>
+<li><strong>Open Folder</strong> opens the folder in SweWolf File
+Explorer if you have it, otherwise in Windows File Explorer, with the
+file selected if it exists. During a download, it opens the folder of
+the running download.</li>
 </ul>
+<p>FFmpeg Assistant looks for SweWolf Media Player and SweWolf File
+Explorer in its own folder, and then in a folder of their own next to
+its folder (for example <code>..\SwewolfMediaPlayer</code>). <em>(new in
+version 1.7.0)</em> If you have one of them, you can right-click its
+button to use the classic way instead: <strong>Open File in the
+Associated Application</strong> or <strong>Open Folder in Windows File
+Explorer</strong>. - <strong>Open Log File</strong> shows FFmpeg’s
+report of the download. Useful when something went wrong.</p>
 <p>You can change the boxes during a download to prepare the next one.
 They are not used until you click <strong>Add to Queue</strong>.
 <strong>Tools &gt; Validate Video File…</strong> and <strong>Subtitles
@@ -446,11 +495,18 @@ in case of a power outage.</p>
 <h2 id="validate-video-file">Validate Video File</h2>
 <p><strong>Tools &gt; Validate Video File…</strong> checks any video
 file on your computer with the same check that runs after a download.
-Choose the file, and FFmpeg reads all of it. The file is not
-changed.</p>
-<p>Status then shows “The video file is OK.” or “The video file is
-corrupted or unreadable.” Click <strong>Open Log File</strong> to see
-what FFmpeg found, or <strong>Open File</strong> to play the file.</p>
+Choose the file, and FFmpeg reads all of it. The file is not changed.
+The file you downloaded last is already filled in in the window where
+you choose the file. <em>(new in version 1.7.0)</em></p>
+<p>Status then shows “The video file is OK.” or what was wrong. When
+FFmpeg found decoding problems, Status says how many places in the file
+have them and about where, for example “The video file has 1 decoding
+problem, at about 1:53 (the file is 2:14 long).” The time is correct to
+within a few seconds. A single problem at the very end of a file is
+typical for a stream that was stopped: the last picture is cut off.
+<em>(new in version 1.7.0)</em> Click <strong>Open Log File</strong> to
+see what FFmpeg found (the places are also listed at the end of the
+log), or <strong>Open File</strong> to play the file.</p>
 <p>During the check, the <strong>Command</strong> box shows the command
 that runs, and <strong>Folder</strong> and <strong>File Name</strong>
 show the file. Click <strong>Cancel</strong> to stop the check. To start
@@ -522,14 +578,17 @@ after the <strong>TV Shows</strong> folder.</p>
 <code>\\server</code>. Empty lines are ignored. If a folder in the list
 does not exist when you download to it, you are asked whether to create
 it.</p>
-<h3 id="show-save-subtitles-as-separate-files">Show Save Subtitles as
-Separate Files</h3>
-<p><em>(new in version 1.6.0)</em></p>
-<p>Check <strong>Show Save Subtitles as Separate Files</strong> to show
-the <a href="#save-subtitles-as-separate-files">Save Subtitles as
-Separate Files</a> box in the main window. It is off by default. When
-you turn it off again, the box is hidden and unchecked, so no subtitle
-files are saved.</p>
+<h3 id="options">Options</h3>
+<p><strong>Show Save Subtitles as Separate Files</strong> <em>(new in
+version 1.6.0)</em>: check it to show the <a href="#save-subtitles-as-separate-files">Save Subtitles as Separate
+Files</a> box in the main window. It is off by default. When you turn it
+off again, the box is hidden and unchecked, so no subtitle files are
+saved.</p>
+<p><strong>Add -c copy to Stream and URL Commands</strong> <em>(new in
+version 1.7.0)</em>: on by default. FFmpeg Assistant adds
+<code>-c copy</code> to a pasted stream command that has no codec
+options, so the video is copied instead of re-encoded. See <a href="#adding--c-copy-automatically">Adding <code>-c copy</code>
+Automatically</a>.</p>
 <h2 id="create-shortcut">Create Shortcut</h2>
 <p><strong>Tools &gt; Create Shortcut…</strong> creates shortcuts to
 FFmpeg Assistant. Check where you want them:</p>

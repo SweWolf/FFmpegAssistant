@@ -80,6 +80,25 @@ path of an `.m3u8` file on your computer. FFmpeg Assistant turns it into a full 
 You don't need to change the output file name at the end of the command: FFmpeg Assistant
 replaces it with the **Folder** and **File Name** you choose.
 
+#### Adding `-c copy` Automatically
+
+*(new in version 1.7.0)*
+
+Without codec options, FFmpeg re-encodes the video. For a stream this lowers the quality and can
+be too slow to keep up. When you paste a command or a web address for a stream (an `http` or
+`https` address, or an `.m3u8` playlist), FFmpeg Assistant therefore adds `-c copy` to the
+command, so the video and audio are copied as they are. A command you type is checked when you
+leave the box.
+
+- It is added only once for each address. If you delete `-c copy` yourself, it is not added
+  again until you enter another address or clear the box.
+- A command that already has its own options for codecs, filters or stream selection (for example
+  `-c:v`, `-vf` or `-map`) is left as it is.
+- Commands for files on your computer are never changed.
+
+You can turn this off with **Add -c copy to Stream and URL Commands** in the
+[settings](#options).
+
 ### Folder and File Name
 
 **Folder** is where the file is saved. The list contains your **Videos** folder and its
@@ -165,12 +184,27 @@ the box before the download is finished, you get the usual notification. Errors 
 
 This option is not used for subtitle files.
 
+#### Stopping a Stream
+
+*(new in version 1.7.0)*
+
+A stream never ends by itself. While a download in this mode is running, the **Cancel** button is
+called **Stop Download**. FFmpeg is asked to finish the picture it is working on and close the file
+properly, which can take a few seconds, so the end of the video is not cut off. Then FFmpeg
+Assistant asks if you want to convert what has been downloaded to the final format (for example
+MP4):
+
+- **Yes**: the video is converted, and the `.ts` file is deleted when the conversion has worked.
+  If the conversion fails, the `.ts` file is kept. Click **Cancel** during the conversion to stop
+  it: the `.ts` file is kept.
+- **No**: you are asked if you want to keep the `.ts` file.
+
 ### Save Subtitles as Separate Files
 
 *(new in version 1.6.0)*
 
 This box is hidden by default. To see it, check **Show Save Subtitles as Separate Files** in the
-[settings](#show-save-subtitles-as-separate-files).
+[settings](#options).
 
 Check **Save Subtitles as Separate Files** to save the subtitles that are stored inside the
 downloaded video as `.srt` files in the same folder. Some players and TVs only show subtitles from
@@ -203,12 +237,20 @@ FFmpeg Assistant shows what went wrong. The downloaded video is not affected.
   is: the same download can't be added twice. If the download fails or you cancel it, you can add
   it again.
 - **Cancel** stops the download. If a partial file was saved, you are asked whether to delete it.
+  In watch mode the button is called **Stop Download**; see [Stopping a Stream](#stopping-a-stream).
   If more downloads are waiting in the queue, you are first asked whether to cancel them too.
 - **Clear** empties all the boxes, so you can start over. During a download it only empties the
   boxes: the progress of the running download stays.
-- **Open File** opens the downloaded file in your default video player.
-- **Open Folder** opens the folder in File Explorer, with the file selected if it exists. During a
-  download, it opens the folder of the running download.
+- **Open File** opens the downloaded file in SweWolf Media Player if you have it, otherwise in
+  your default video player.
+- **Open Folder** opens the folder in SweWolf File Explorer if you have it, otherwise in Windows
+  File Explorer, with the file selected if it exists. During a download, it opens the folder of
+  the running download.
+
+FFmpeg Assistant looks for SweWolf Media Player and SweWolf File Explorer in its own folder, and
+then in a folder of their own next to its folder (for example `..\SwewolfMediaPlayer`). *(new in
+version 1.7.0)* If you have one of them, you can right-click its button to use the classic way
+instead: **Open File in the Associated Application** or **Open Folder in Windows File Explorer**.
 - **Open Log File** shows FFmpeg's report of the download. Useful when something went wrong.
 
 You can change the boxes during a download to prepare the next one. They are not used until you
@@ -342,9 +384,15 @@ download is not saved in case of a power outage.
 
 **Tools > Validate Video File...** checks any video file on your computer with the same check
 that runs after a download. Choose the file, and FFmpeg reads all of it. The file is not changed.
+The file you downloaded last is already filled in in the window where you choose the file. *(new
+in version 1.7.0)*
 
-Status then shows "The video file is OK." or "The video file is corrupted or unreadable." Click
-**Open Log File** to see what FFmpeg found, or **Open File** to play the file.
+Status then shows "The video file is OK." or what was wrong. When FFmpeg found decoding
+problems, Status says how many places in the file have them and about where, for example "The
+video file has 1 decoding problem, at about 1:53 (the file is 2:14 long)." The time is correct to
+within a few seconds. A single problem at the very end of a file is typical for a stream that was
+stopped: the last picture is cut off. *(new in version 1.7.0)* Click **Open Log File** to see what FFmpeg found
+(the places are also listed at the end of the log), or **Open File** to play the file.
 
 During the check, the **Command** box shows the command that runs, and **Folder** and
 **File Name** show the file. Click **Cancel** to stop the check. To start a download afterwards,
@@ -414,14 +462,16 @@ Each line must be a full path that starts with a drive letter or `\\server`. Emp
 ignored. If a folder in the list does not exist when you download to it, you are asked whether
 to create it.
 
-### Show Save Subtitles as Separate Files
+### Options
 
-*(new in version 1.6.0)*
-
-Check **Show Save Subtitles as Separate Files** to show the
+**Show Save Subtitles as Separate Files** *(new in version 1.6.0)*: check it to show the
 [Save Subtitles as Separate Files](#save-subtitles-as-separate-files) box in the main window.
 It is off by default. When you turn it off again, the box is hidden and unchecked, so no subtitle
 files are saved.
+
+**Add -c copy to Stream and URL Commands** *(new in version 1.7.0)*: on by default. FFmpeg
+Assistant adds `-c copy` to a pasted stream command that has no codec options, so the video is
+copied instead of re-encoded. See [Adding `-c copy` Automatically](#adding--c-copy-automatically).
 
 ## Create Shortcut
 

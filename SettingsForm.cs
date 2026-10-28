@@ -16,6 +16,7 @@ namespace FFmpegAssistant
             cboNewVersionCheck.SelectedItem = AppSettings.CheckForUpdatesOnStartup;
             txtExtraFolders.Lines = AppSettings.ExtraFolders.ToArray();
             chkShowSaveSubtitlesAsSeparateFiles.Checked = AppSettings.ShowSaveSubtitlesAsSeparateFiles;
+            chkAddCopyCodec.Checked = AppSettings.AddCopyCodec;
 
             cboFinishedDownlaodSound.Items.AddRange(SoundLibrary.GetAvailableSounds().ToArray());
             cboFinishedDownlaodSound.Items.Add(CustomSoundSentinel);
@@ -168,6 +169,7 @@ namespace FFmpegAssistant
             AppSettings.FinishedDownloadSoundFile = GetSelectedSoundIdentifier();
             AppSettings.ExtraFolders = extraFolders;
             AppSettings.ShowSaveSubtitlesAsSeparateFiles = chkShowSaveSubtitlesAsSeparateFiles.Checked;
+            AppSettings.AddCopyCodec = chkAddCopyCodec.Checked;
 
             DialogResult = DialogResult.OK;
             Close();

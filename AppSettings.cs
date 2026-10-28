@@ -327,6 +327,49 @@ namespace FFmpegAssistant
         }
 
         // -------------------------------------------------------------------------
+        // Add "-c copy" to a pasted stream/URL command that has no codec options (default: Yes)
+        // -------------------------------------------------------------------------
+
+        private static readonly string AddCopyCodecFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SweWolfSoftware", "FFmpegAssist", "add-copy-codec.txt");
+
+        private static bool? _cachedAddCopyCodec;
+
+        public static bool AddCopyCodec
+        {
+            get
+            {
+                if (_cachedAddCopyCodec.HasValue) return _cachedAddCopyCodec.Value;
+                try
+                {
+                    if (File.Exists(AddCopyCodecFile))
+                    {
+                        string v = File.ReadAllText(AddCopyCodecFile, System.Text.Encoding.UTF8).Trim();
+                        if (v == "Yes" || v == "No")
+                        {
+                            _cachedAddCopyCodec = v == "Yes";
+                            return _cachedAddCopyCodec.Value;
+                        }
+                    }
+                }
+                catch { }
+                _cachedAddCopyCodec = true;
+                return true;
+            }
+            set
+            {
+                _cachedAddCopyCodec = value;
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(AddCopyCodecFile)!);
+                    File.WriteAllText(AddCopyCodecFile, value ? "Yes" : "No", System.Text.Encoding.UTF8);
+                }
+                catch { /* never crash the host app */ }
+            }
+        }
+
+        // -------------------------------------------------------------------------
         // Extra folders in the main window's Folder list, one per line (default: none)
         // -------------------------------------------------------------------------
 

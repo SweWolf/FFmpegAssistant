@@ -42,6 +42,7 @@ namespace FFmpegAssistant
             txtExtraFolders = new TextBox();
             lblExtraFoldersHint = new Label();
             groupBox4 = new GroupBox();
+            chkAddCopyCodec = new CheckBox();
             chkShowSaveSubtitlesAsSeparateFiles = new CheckBox();
             grpFfmpeg.SuspendLayout();
             groupBox2.SuspendLayout();
@@ -57,7 +58,7 @@ namespace FFmpegAssistant
             grpFfmpeg.Controls.Add(txtFfmpegPath);
             grpFfmpeg.Controls.Add(btnBrowseFfmpeg);
             grpFfmpeg.Controls.Add(lblFfmpegHint);
-            grpFfmpeg.Location = new Point(10, 656);
+            grpFfmpeg.Location = new Point(10, 681);
             grpFfmpeg.Name = "grpFfmpeg";
             grpFfmpeg.Size = new Size(470, 105);
             grpFfmpeg.TabIndex = 5;
@@ -105,7 +106,7 @@ namespace FFmpegAssistant
             // btnOK
             // 
             btnOK.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnOK.Location = new Point(325, 778);
+            btnOK.Location = new Point(325, 803);
             btnOK.Name = "btnOK";
             btnOK.Size = new Size(75, 27);
             btnOK.TabIndex = 8;
@@ -117,7 +118,7 @@ namespace FFmpegAssistant
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(406, 778);
+            btnCancel.Location = new Point(406, 803);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(75, 27);
             btnCancel.TabIndex = 9;
@@ -130,7 +131,7 @@ namespace FFmpegAssistant
             groupBox2.Controls.Add(label3);
             groupBox2.Controls.Add(txtNumberOfDownloadAttempts);
             groupBox2.Controls.Add(label2);
-            groupBox2.Location = new Point(10, 235);
+            groupBox2.Location = new Point(10, 260);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new Size(470, 108);
             groupBox2.TabIndex = 2;
@@ -168,7 +169,7 @@ namespace FFmpegAssistant
             // 
             groupBox3.Controls.Add(cboNewVersionCheck);
             groupBox3.Controls.Add(label4);
-            groupBox3.Location = new Point(10, 573);
+            groupBox3.Location = new Point(10, 598);
             groupBox3.Name = "groupBox3";
             groupBox3.Size = new Size(470, 77);
             groupBox3.TabIndex = 4;
@@ -204,7 +205,7 @@ namespace FFmpegAssistant
             groupBox1.Controls.Add(lblFinishedDownlaodSound);
             groupBox1.Controls.Add(label1);
             groupBox1.Controls.Add(cboActionWhenDownloadFinished);
-            groupBox1.Location = new Point(10, 362);
+            groupBox1.Location = new Point(10, 387);
             groupBox1.Name = "groupBox1";
             groupBox1.Size = new Size(470, 205);
             groupBox1.TabIndex = 3;
@@ -323,12 +324,13 @@ namespace FFmpegAssistant
             // groupBox4
             // 
             groupBox4.Controls.Add(chkShowSaveSubtitlesAsSeparateFiles);
+            groupBox4.Controls.Add(chkAddCopyCodec);
             groupBox4.Location = new Point(10, 167);
             groupBox4.Name = "groupBox4";
-            groupBox4.Size = new Size(470, 51);
+            groupBox4.Size = new Size(470, 76);
             groupBox4.TabIndex = 1;
             groupBox4.TabStop = false;
-            groupBox4.Text = "Show";
+            groupBox4.Text = "Options";
             // 
             // chkShowSaveSubtitlesAsSeparateFiles
             // 
@@ -340,13 +342,23 @@ namespace FFmpegAssistant
             chkShowSaveSubtitlesAsSeparateFiles.Text = "Show Save Subtitles as Separate Files";
             chkShowSaveSubtitlesAsSeparateFiles.UseVisualStyleBackColor = true;
             // 
+            // chkAddCopyCodec
+            // 
+            chkAddCopyCodec.AutoSize = true;
+            chkAddCopyCodec.Location = new Point(10, 47);
+            chkAddCopyCodec.Name = "chkAddCopyCodec";
+            chkAddCopyCodec.Size = new Size(300, 19);
+            chkAddCopyCodec.TabIndex = 1;
+            chkAddCopyCodec.Text = "Add -c copy to Stream and URL Commands";
+            chkAddCopyCodec.UseVisualStyleBackColor = true;
+            // 
             // SettingsForm
             // 
             AcceptButton = btnOK;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(493, 817);
+            ClientSize = new Size(493, 842);
             ControlBox = false;
             Controls.Add(groupBox4);
             Controls.Add(grpExtraFolders);
@@ -408,5 +420,6 @@ namespace FFmpegAssistant
         private Label lblExtraFoldersHint;
         private GroupBox groupBox4;
         private CheckBox chkShowSaveSubtitlesAsSeparateFiles;
+        private CheckBox chkAddCopyCodec;
     }
 }
