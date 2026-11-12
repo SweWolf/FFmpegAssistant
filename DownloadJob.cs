@@ -24,6 +24,8 @@ namespace FFmpegAssistant
         public bool WatchMode { get; init; }
         public int M3u8SegmentCount { get; init; }
         public M3u8ContentType M3u8Type { get; init; }
+        /// <summary>A live stream: the playlist has no end, so it is recorded until Stop Download (always in watch mode).</summary>
+        public bool IsLive { get; init; }
 
         [JsonIgnore] public string OutputPath => Path.Combine(Folder, FileName);
 

@@ -210,6 +210,19 @@ MP4):
   it: the `.ts` file is kept.
 - **No**: you are asked if you want to keep the `.ts` file.
 
+#### Live Streams
+
+*(new in version 1.7.0)*
+
+A live stream (for example a TV channel) has no end, so it can only be recorded this way. When
+you click **Download**, FFmpeg Assistant looks at the playlist (it reads the playlist, not the
+video). If it has no end, **Enable Watching While Downloading** is checked for you, and **Status**
+reads "Live stream — recording to a .ts file. Click Stop Download to finish." Click **Stop Download**
+when you have enough: see [Stopping a Stream](#stopping-a-stream). The progress bar and **Estimated
+remaining time** stay empty, since there is no end to count towards.
+
+If you add other downloads to the queue, they wait until you have stopped the live stream.
+
 ### Save Subtitles as Separate Files
 
 *(new in version 1.6.0)*

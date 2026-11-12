@@ -39,6 +39,8 @@ namespace FFmpegAssistant
         private CancellationTokenSource? _stopCts; // cancelled by "Stop Download": FFmpeg is told to finish and close the file
         private bool _stopRequested;            // the user clicked "Stop Download": convert or keep the .ts file instead of cancelling
         private bool _runInWatchMode;  // the running download was started with "Enable Watching While Downloading"
+        private bool _runIsLive;       // the running download is a live stream (no end): Status says how to finish it
+        private const string LiveStatusText = "Live stream — recording to a .ts file. Click Stop Download to finish.";
 
         // Download queue: while downloads run, Download becomes "Add to Queue" (see RunQueueAsync)
         private readonly DownloadQueue _queue = new();
@@ -752,7 +754,7 @@ namespace FFmpegAssistant
             {
                 _progressStarted = true;
                 _startingDownloadShown = false;
-                SetStatus("Downloading...");
+                SetStatus(_runIsLive ? LiveStatusText : "Downloading...");
             }
 
             string displaySize = AdjustedFeedback ? FormatSize(size) : size;
@@ -1283,6 +1285,13 @@ namespace FFmpegAssistant
             // This runs before filename determination so we can suggest the right default extension.
             var m3u8Info = await TryGetM3u8InfoAsync(originalCommand);
 
+            // A live stream never ends, so it can only be recorded the "watching" way: to a .ts file that
+            // Stop Download closes. The checkbox is checked for the user, who sees it, and Status explains
+            // (see LiveStatusText). Subtitles are never live streams in this sense.
+            bool isLive = m3u8Info.IsLive && m3u8Info.Type != M3u8ContentType.Subtitle;
+            if (isLive && !chkEnableWatchingWhileDownloading.Checked)
+                chkEnableWatchingWhileDownloading.Checked = true;
+
             // The file name may already be non-empty here — e.g. auto-suggested from the Title/TV
             // Show workflow before we had any way to know this was actually a subtitle stream. Now
             // that the playlist confirms it, force the extension to .srt regardless of what was
@@ -1390,8 +1399,9 @@ namespace FFmpegAssistant
                 Folder = folder,
                 FileName = fileName,
                 WatchMode = chkEnableWatchingWhileDownloading.Checked && !isSrt,
-                M3u8SegmentCount = m3u8Info.SegmentCount,
-                M3u8Type = m3u8Info.Type
+                M3u8SegmentCount = isLive ? 0 : m3u8Info.SegmentCount, // no end to count towards: no segment progress
+                M3u8Type = m3u8Info.Type,
+                IsLive = isLive
             };
             string outputPath = job.OutputPath;
 
@@ -1459,6 +1469,7 @@ namespace FFmpegAssistant
             bool isSrt = job.IsSrt;
             bool watchMode = job.WatchMode;
             _runInWatchMode = watchMode;
+            _runIsLive = job.IsLive;
             _stopRequested = false;
             _m3u8ContentType = job.M3u8Type;
             _totalM3u8Segments = job.M3u8SegmentCount;
@@ -2377,6 +2388,7 @@ namespace FFmpegAssistant
             _isValidating = true;
             _validationOnly = true;
             _runInWatchMode = false;
+            _runIsLive = false;
             _cts = new CancellationTokenSource();
             _lastOutputPath = filePath; // Open File opens the validated file
             _lastLogFile = logFile;
@@ -2762,12 +2774,12 @@ namespace FFmpegAssistant
         // FFmpeg process
         // -------------------------------------------------------------------------
 
-        private static async Task<(int SegmentCount, M3u8ContentType Type)> TryGetM3u8InfoAsync(string command)
+        private static async Task<(int SegmentCount, M3u8ContentType Type, bool IsLive)> TryGetM3u8InfoAsync(string command)
         {
             try
             {
                 var m = Regex.Match(command, @"-i\s+""([^""]+)""", RegexOptions.IgnoreCase);
-                if (!m.Success) return (0, M3u8ContentType.Unknown);
+                if (!m.Success) return (0, M3u8ContentType.Unknown, false);
 
                 string input = m.Groups[1].Value;
 
@@ -2777,20 +2789,22 @@ namespace FFmpegAssistant
                 bool isM3u8Ext = input.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
                                  input.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase);
                 bool isFile = isM3u8Ext && File.Exists(input);
-                if (!isUrl && !isFile) return (0, M3u8ContentType.Unknown);
+                if (!isUrl && !isFile) return (0, M3u8ContentType.Unknown, false);
 
-                string content;
-                if (isFile)
-                    content = await File.ReadAllTextAsync(input);
-                else
-                {
-                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-                    content = await client.GetStringAsync(input);
-                }
+                using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                string content = isFile
+                    ? await File.ReadAllTextAsync(input)
+                    : await client.GetStringAsync(input);
 
-                // Master playlist — has variant stream entries; cannot count leaf segments here
+                // DASH (.mpd): a live stream says type="dynamic"
+                if (content.Contains("<MPD", StringComparison.OrdinalIgnoreCase))
+                    return (0, M3u8ContentType.Unknown,
+                        Regex.IsMatch(content, @"\btype\s*=\s*""dynamic""", RegexOptions.IgnoreCase));
+
+                // Master playlist — has variant stream entries; cannot count leaf segments here. Whether it is
+                // live is only told by a variant's own playlist, so the first one is fetched.
                 if (content.Contains("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase))
-                    return (0, M3u8ContentType.Video);
+                    return (0, M3u8ContentType.Video, await IsLiveVariantAsync(client, input, content, isFile));
 
                 // Count real (non-dummy) #EXTINF segment URLs and classify by extension
                 int count = 0;
@@ -2822,9 +2836,50 @@ namespace FFmpegAssistant
                 M3u8ContentType type = isSubtitle ? M3u8ContentType.Subtitle
                                      : isVideo    ? M3u8ContentType.Video
                                                   : M3u8ContentType.Unknown;
-                return (count, type);
+                return (count, type, count > 0 && IsLivePlaylist(content));
             }
-            catch { return (0, M3u8ContentType.Unknown); }
+            catch { return (0, M3u8ContentType.Unknown, false); }
+        }
+
+        /// <summary>
+        /// A media playlist of a live stream: it has segments but no #EXT-X-ENDLIST line (a finished video
+        /// has one), and it doesn't say it is a VOD. The playlist keeps growing while the stream is on.
+        /// </summary>
+        private static bool IsLivePlaylist(string content) =>
+            !content.Contains("#EXT-X-ENDLIST", StringComparison.OrdinalIgnoreCase) &&
+            !Regex.IsMatch(content, @"#EXT-X-PLAYLIST-TYPE:\s*VOD", RegexOptions.IgnoreCase);
+
+        /// <summary>
+        /// For a master playlist: fetches its first variant playlist and checks it with
+        /// <see cref="IsLivePlaylist"/>. Any problem (no variant, not reachable) counts as not live.
+        /// </summary>
+        private static async Task<bool> IsLiveVariantAsync(System.Net.Http.HttpClient client, string masterInput,
+                                                           string masterContent, bool masterIsFile)
+        {
+            try
+            {
+                string? variant = null;
+                bool afterStreamInf = false;
+                foreach (string line in masterContent.Split('\n'))
+                {
+                    string t = line.Trim();
+                    if (t.StartsWith("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase)) afterStreamInf = true;
+                    else if (afterStreamInf && t.Length > 0 && !t.StartsWith('#')) { variant = t; break; }
+                }
+                if (variant == null) return false;
+
+                string? url = null;
+                if (Uri.TryCreate(variant, UriKind.Absolute, out var abs) &&
+                    (abs.Scheme == Uri.UriSchemeHttp || abs.Scheme == Uri.UriSchemeHttps))
+                    url = abs.AbsoluteUri;
+                else if (!masterIsFile && Uri.TryCreate(new Uri(masterInput), variant, out var rel))
+                    url = rel.AbsoluteUri; // relative to the master playlist's address
+                if (url == null) return false;
+
+                string variantContent = await client.GetStringAsync(url);
+                return variantContent.Contains("#EXTINF", StringComparison.OrdinalIgnoreCase) && IsLivePlaylist(variantContent);
+            }
+            catch { return false; }
         }
 
         private bool IsRealM3u8Segment(string ffmpegLine)

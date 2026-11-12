@@ -276,6 +276,19 @@ conversion fails, the <code>.ts</code> file is kept. Click
 <li><strong>No</strong>: you are asked if you want to keep the
 <code>.ts</code> file.</li>
 </ul>
+<h4 id="live-streams">Live Streams</h4>
+<p><em>(new in version 1.7.0)</em></p>
+<p>A live stream (for example a TV channel) has no end, so it can only
+be recorded this way. When you click <strong>Download</strong>, FFmpeg
+Assistant looks at the playlist (it reads the playlist, not the video).
+If it has no end, <strong>Enable Watching While Downloading</strong> is
+checked for you, and <strong>Status</strong> reads “Live stream —
+recording to a .ts file. Click Stop Download to finish.” Click
+<strong>Stop Download</strong> when you have enough: see <a href="#stopping-a-stream">Stopping a Stream</a>. The progress bar and
+<strong>Estimated remaining time</strong> stay empty, since there is no
+end to count towards.</p>
+<p>If you add other downloads to the queue, they wait until you have
+stopped the live stream.</p>
 <h3 id="save-subtitles-as-separate-files">Save Subtitles as Separate
 Files</h3>
 <p><em>(new in version 1.6.0)</em></p>
