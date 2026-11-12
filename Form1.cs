@@ -22,6 +22,8 @@ namespace FFmpegAssistant
         private string? _validationFileName; // the validated file's name, shown in File Name
         private int _totalM3u8Segments;
         private int _m3u8SegmentsOpened;
+        private readonly System.Diagnostics.Stopwatch _segmentStopwatch = new(); // started at the first M3U8 segment, for the remaining-time estimate
+        private const int MinSegmentsForEstimate = 5; // segments to open before the estimate is shown
         private M3u8ContentType _m3u8ContentType;
         private bool _updatingSeasonEpisode;
         private bool _settingCategoryFromAutoDetect;
@@ -620,6 +622,19 @@ namespace FFmpegAssistant
             {
                 _m3u8SegmentsOpened++;
                 int pct = Math.Min(_m3u8SegmentsOpened * 100 / _totalM3u8Segments, 99);
+
+                // Estimated remaining time from the pace so far: the time from the first segment to this one
+                // covers (opened - 1) segments. A few segments are needed before the pace means anything.
+                if (_m3u8SegmentsOpened == 1)
+                    _segmentStopwatch.Restart();
+                string segmentsRemainingText = "—";
+                if (_m3u8SegmentsOpened >= MinSegmentsForEstimate)
+                {
+                    double secsPerSegment = _segmentStopwatch.Elapsed.TotalSeconds / (_m3u8SegmentsOpened - 1);
+                    int remainingSegments = Math.Max(_totalM3u8Segments - _m3u8SegmentsOpened, 0);
+                    segmentsRemainingText = TimeSpan.FromSeconds(secsPerSegment * remainingSegments).ToString(@"h\:mm\:ss");
+                }
+
                 if (!_progressStarted)
                 {
                     _progressStarted = true;
@@ -631,6 +646,7 @@ namespace FFmpegAssistant
                 {
                     progressBar.Value = pct;
                     UpdateGridRow("Time", $"{_m3u8SegmentsOpened}/{_totalM3u8Segments}");
+                    lblEstimatedRemaining.Text = $"Estimated remaining time: {segmentsRemainingText}";
                     TaskbarProgress.SetNormal(this, pct, 100);
                 });
                 return;

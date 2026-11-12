@@ -284,7 +284,8 @@ The table shows what FFmpeg reports during the download:
 | **Elapsed** | How long the download has been running |
 
 For some streams, FFmpeg can't tell the length in advance. Then **Time** shows the number of
-downloaded parts instead, for example `120/450`.
+downloaded parts instead, for example `120/450`. **Estimated remaining time** is then worked out from how fast the parts
+arrive, so it appears after the first few parts and can change as the speed changes.
 
 The progress bar and **Estimated remaining time** include the check of the file after the
 download (see [What Happens During a Download](#what-happens-during-a-download)).
