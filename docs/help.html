@@ -134,6 +134,12 @@ another address or clear the box.</li>
 stream selection (for example <code>-c:v</code>, <code>-vf</code> or
 <code>-map</code>) is left as it is.</li>
 <li>Commands for files on your computer are never changed.</li>
+<li><strong>Subtitles:</strong> a subtitle stream can’t be copied into
+an <code>.srt</code> file. When you click <strong>Download</strong> and
+the file name ends in <code>.srt</code>, or the playlist turns out to be
+a subtitle stream, FFmpeg Assistant removes <code>-c copy</code> from
+the command (you see it disappear in the <strong>Command</strong> box).
+FFmpeg then converts the subtitles to SRT itself.</li>
 </ul>
 <p>You can turn this off with <strong>Add “-c copy” to Stream and URL
 Commands</strong> in the <a href="#options">settings</a>.</p>

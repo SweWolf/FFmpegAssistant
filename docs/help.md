@@ -95,6 +95,10 @@ leave the box.
 - A command that already has its own options for codecs, filters or stream selection (for example
   `-c:v`, `-vf` or `-map`) is left as it is.
 - Commands for files on your computer are never changed.
+- **Subtitles:** a subtitle stream can't be copied into an `.srt` file. When you click
+  **Download** and the file name ends in `.srt`, or the playlist turns out to be a subtitle
+  stream, FFmpeg Assistant removes `-c copy` from the command (you see it disappear in the
+  **Command** box). FFmpeg then converts the subtitles to SRT itself.
 
 You can turn this off with **Add "-c copy" to Stream and URL Commands** in the
 [settings](#options).

@@ -1355,6 +1355,18 @@ namespace FFmpegAssistant
             // SRT files use the same (part) protection but skip watch mode and video validation.
             // (See DownloadJob.PartPath and DownloadPath.)
             bool isSrt = fileName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase);
+
+            // A subtitle stream (WebVTT) can't be copied into an .srt file: FFmpeg stops with "Could not write
+            // header ... Invalid argument" (exit code -22), only after reading the whole playlist. Without
+            // "-c copy" it converts the subtitles itself. The playlist check above has already made the file name
+            // end in .srt for a subtitle stream, so this covers a typed .srt name and a detected subtitle.
+            // The Command box shows the change; _copyCodecHandledInput stops TryAddCopyCodec from adding it again.
+            if (isSrt && RemoveCopyCodec(originalCommand) is string withoutCopy && withoutCopy != originalCommand)
+            {
+                originalCommand = withoutCopy;
+                txtOriginalCommand.Text = withoutCopy;
+            }
+
             var job = new DownloadJob
             {
                 Command = originalCommand, // replaced below, once DownloadPath is known
@@ -1522,7 +1534,14 @@ namespace FFmpegAssistant
                         lblEstimatedRemaining.Text = "Estimated remaining time: —";
                         TaskbarProgress.SetError(this, 100, 100);
 
-                        if (maxAttempts > 1 && attempt < maxAttempts && !_closeAfterCancel)
+                        // FFmpeg can't write the output with these settings: another try fails the same way
+                        bool permanentFailure = errorLines.Any(l =>
+                            l.Contains("Could not write header", StringComparison.OrdinalIgnoreCase) ||
+                            l.Contains("Unsupported subtitles codec", StringComparison.OrdinalIgnoreCase));
+                        if (permanentFailure)
+                            WriteAppLog("RETRY    : No auto-retry — FFmpeg can't write the output file with this command");
+
+                        if (!permanentFailure && maxAttempts > 1 && attempt < maxAttempts && !_closeAfterCancel)
                         {
                             try { if (File.Exists(downloadPath)) File.Delete(downloadPath); } catch { }
                             WriteAppLog($"RETRY    : Auto-retry {attempt + 1} of {maxAttempts} after exit code {exitCode}");
@@ -2842,6 +2861,14 @@ namespace FFmpegAssistant
             if (!CopyOutputExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase)) return null;
             return command[..last.Index] + "-c copy " + command[last.Index..];
         }
+
+        // "-c copy", "-codec copy", "-c:s copy" and "-scodec copy": copying the streams as they are
+        private static readonly Regex CopyCodecOptionRegex = new(
+            @"\s+-(?:c|codec|scodec)(?::s)?\s+copy(?=\s|$)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // The command without its "-c copy" options (used for subtitle downloads: see PrepareDownloadJobAsync)
+        private static string RemoveCopyCodec(string command) => CopyCodecOptionRegex.Replace(command, "");
 
         // Adds "-c copy" to a stream/URL command once per input: if the user removes it, it stays removed
         // until another input (URL) is entered or the box is cleared.
