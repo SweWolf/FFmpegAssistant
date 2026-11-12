@@ -51,7 +51,7 @@ You can see which FFmpeg version is found under **Help > About**.
    command it shows.
 2. Start FFmpeg Assistant. If the command is still on the clipboard, it is pasted into the
    **Command** box automatically. Otherwise, paste it there yourself.
-3. Choose **Movie** or **TV Show** to get a suggested folder and file name, or choose them
+3. Choose **Movie**, **TV Show** or **Subtitle** to get a suggested folder and file name, or choose them
    yourself under **Folder** and **File Name**.
 4. Click **Download**.
 
@@ -158,6 +158,13 @@ Choose **TV Show** to save the file in its own folder under **Videos\\TV Shows**
 - **Season** and **Episode** show the suggested numbers. Change them to download another episode.
   They are only shown for TV shows.
 
+#### Subtitle
+
+Choose **Subtitle** when you want to download the subtitles of an episode or movie, for example
+right after you have set up its name with **TV Show** or **Movie**. The extension of **File Name**
+becomes `.srt` (an extension such as `.mp4` is replaced). **Folder**, **Title** and **Year** stay as
+they are, so the subtitle file is saved next to the video with the same name.
+
 #### Automatic Recognition
 
 - When you leave the **Title** box, FFmpeg Assistant looks for a folder with that title in
@@ -166,7 +173,7 @@ Choose **TV Show** to save the file in its own folder under **Videos\\TV Shows**
   saved directly in the **Movies** folder.
 - FFmpeg Assistant remembers which folder under **TV Shows** you downloaded each show to. When
   you paste a command for a show that has a folder (remembered or with a matching name) and you
-  haven't chosen **Movie** or **TV Show** yet, **TV Show** is chosen for you. If you had chosen
+  haven't chosen **Movie**, **TV Show** or **Subtitle** yet, **TV Show** is chosen for you. If you had chosen
   **Movie**, it is left alone: choose **TV Show** yourself to get the same result. Either way,
   that folder is chosen automatically, and the next episode is suggested. **Title** and **Year** are filled in from the folder name. This is useful when the
   command has the wrong name for the show: if it says `Gränslandet` and you changed **Title** to

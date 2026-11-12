@@ -73,6 +73,7 @@ namespace FFmpegAssistant
             txtEpisode = new TextBox();
             lblSeason = new Label();
             txtSeason = new TextBox();
+            rdoSubtitle = new RadioButton();
             rdoTvShow = new RadioButton();
             rdoMovie = new RadioButton();
             pnlContent = new Panel();
@@ -421,6 +422,7 @@ namespace FFmpegAssistant
             groupBox1.Controls.Add(txtEpisode);
             groupBox1.Controls.Add(lblSeason);
             groupBox1.Controls.Add(txtSeason);
+            groupBox1.Controls.Add(rdoSubtitle);
             groupBox1.Controls.Add(rdoTvShow);
             groupBox1.Controls.Add(rdoMovie);
             groupBox1.Location = new Point(14, 87);
@@ -437,7 +439,7 @@ namespace FFmpegAssistant
             txtYear.MaxLength = 4;
             txtYear.Name = "txtYear";
             txtYear.Size = new Size(62, 23);
-            txtYear.TabIndex = 3;
+            txtYear.TabIndex = 4;
             toolTip1.SetToolTip(txtYear, "Optional: the year the movie was released, or the year the TV show first started (as on IMDb).\n2 or 4 digits, e.g. 26 or 2026.");
             txtYear.TextChanged += txtYear_TextChanged;
             txtYear.Leave += txtYear_Leave;
@@ -458,7 +460,7 @@ namespace FFmpegAssistant
             txtTitle.Location = new Point(15, 79);
             txtTitle.Name = "txtTitle";
             txtTitle.Size = new Size(500, 23);
-            txtTitle.TabIndex = 2;
+            txtTitle.TabIndex = 3;
             toolTip1.SetToolTip(txtTitle, "Title used to build the folder and file name");
             txtTitle.TextChanged += txtTitle_TextChanged;
             txtTitle.Leave += txtTitle_Leave;
@@ -489,7 +491,7 @@ namespace FFmpegAssistant
             txtEpisode.Location = new Point(804, 79);
             txtEpisode.Name = "txtEpisode";
             txtEpisode.Size = new Size(63, 23);
-            txtEpisode.TabIndex = 5;
+            txtEpisode.TabIndex = 6;
             toolTip1.SetToolTip(txtEpisode, "Optional");
             txtEpisode.Visible = false;
             // 
@@ -510,16 +512,27 @@ namespace FFmpegAssistant
             txtSeason.Location = new Point(726, 79);
             txtSeason.Name = "txtSeason";
             txtSeason.Size = new Size(63, 23);
-            txtSeason.TabIndex = 4;
+            txtSeason.TabIndex = 5;
             toolTip1.SetToolTip(txtSeason, "Optional");
             txtSeason.Visible = false;
             txtSeason.TextChanged += txtSeason_TextChanged;
+            // 
+            // rdoSubtitle
+            // 
+            rdoSubtitle.Location = new Point(265, 22);
+            rdoSubtitle.Name = "rdoSubtitle";
+            rdoSubtitle.Size = new Size(125, 36);
+            rdoSubtitle.TabIndex = 2;
+            rdoSubtitle.Text = "Subtitle";
+            toolTip1.SetToolTip(rdoSubtitle, "Change the file name extension to .srt, to download subtitles");
+            rdoSubtitle.UseVisualStyleBackColor = true;
+            rdoSubtitle.CheckedChanged += rdoSubtitle_CheckedChanged;
             // 
             // rdoTvShow
             // 
             rdoTvShow.Location = new Point(140, 22);
             rdoTvShow.Name = "rdoTvShow";
-            rdoTvShow.Size = new Size(153, 36);
+            rdoTvShow.Size = new Size(125, 36);
             rdoTvShow.TabIndex = 1;
             rdoTvShow.Text = "TV Show";
             toolTip1.SetToolTip(rdoTvShow, "Auto-suggest folder and file name for a TV show");
@@ -530,7 +543,7 @@ namespace FFmpegAssistant
             // 
             rdoMovie.Location = new Point(15, 22);
             rdoMovie.Name = "rdoMovie";
-            rdoMovie.Size = new Size(153, 36);
+            rdoMovie.Size = new Size(125, 36);
             rdoMovie.TabIndex = 0;
             rdoMovie.Text = "Movie";
             toolTip1.SetToolTip(rdoMovie, "Auto-suggest folder and file name for a movie");
@@ -707,6 +720,7 @@ namespace FFmpegAssistant
         private Panel pnlContent;
         private RadioButton rdoMovie;
         private RadioButton rdoTvShow;
+        private RadioButton rdoSubtitle;
         private ToolTip toolTip1;
         private CheckBox chkEnableWatchingWhileDownloading;
         private Label lblEpisode;

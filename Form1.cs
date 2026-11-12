@@ -2152,6 +2152,7 @@ namespace FFmpegAssistant
 
             rdoMovie.Checked = false;
             rdoTvShow.Checked = false;
+            rdoSubtitle.Checked = false;
 
             // During a download Clear only empties the fields, to prepare the next download (Add to Queue):
             // the progress and Open File / Open Log File belong to the running download
@@ -3309,6 +3310,29 @@ namespace FFmpegAssistant
             _updatingSeasonEpisode = false;
         }
 
+        /// <summary>
+        /// Subtitle: the file name gets the extension .srt (an existing known extension such as .mp4 is
+        /// replaced, otherwise .srt is added). Folder, Title and Year are left as they are: the user is
+        /// most likely downloading the subtitles of the episode or movie just set up. Like the other
+        /// radio buttons it is only checked by a click (and unchecked by Clear).
+        /// </summary>
+        private void rdoSubtitle_CheckedChanged(object sender, EventArgs e)
+        {
+            if (!rdoSubtitle.Checked) return;
+
+            string name = txtFileName.Text.Trim();
+            if (name.Length > 0)
+            {
+                // Only a real file extension is replaced: "Mr. Robot" or "Episode.Name" has no extension
+                string ext = Path.GetExtension(name);
+                string baseName = OutputFileExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase)
+                    ? name[..^ext.Length] : name;
+                txtFileName.Text = baseName + ".srt";
+            }
+
+            btnRun.Focus();
+        }
+
         private void rdoMovie_CheckedChanged(object sender, EventArgs e)
         {
             if (!rdoMovie.Checked) return;
@@ -3573,7 +3597,7 @@ namespace FFmpegAssistant
         /// </summary>
         private void TrySelectTvShowFromPastedCommand(string command)
         {
-            if (rdoMovie.Checked || rdoTvShow.Checked) return;
+            if (rdoMovie.Checked || rdoTvShow.Checked || rdoSubtitle.Checked) return;
 
             string? showName = ExtractShowName(command);
             if (string.IsNullOrEmpty(showName)) return;
@@ -3620,7 +3644,7 @@ namespace FFmpegAssistant
             if (string.IsNullOrEmpty(title)) return;
 
             // Movies are stored directly in the Movies folder, so there is no folder to find for them.
-            if (rdoMovie.Checked) return;
+            if (rdoMovie.Checked || rdoSubtitle.Checked) return;
 
             var matches = FindTitleFolderMatches(cboFolder.Items[2]?.ToString(), title, isTvShow: true).ToList();
             if (matches.Count != 1) return;
