@@ -44,6 +44,7 @@ namespace FFmpegAssistant
         private bool _preparingJob;    // PrepareDownloadJobAsync is checking a new download (e.g. the M3U8 pre-fetch)
         private bool _cancelQueue;     // Cancel > Yes: remove the waiting downloads when the current one has ended
         private int _jobsStartedInRun; // downloads started since the queue started, for the Job box ("2/5")
+        private readonly System.Diagnostics.Stopwatch _runStopwatch = new(); // from the first Download click of a run: retries and queued downloads included, for "Done in 15:11"
         private QueueForm? _queueForm;
         private long _lastRunClickTick = -DoubleClickIgnoreMs; // time of the last accepted Download / Add to Queue click
         private const int DoubleClickIgnoreMs = 3000;
@@ -742,15 +743,23 @@ namespace FFmpegAssistant
             string displayElapsed = AdjustedFeedback && !string.IsNullOrEmpty(elapsed)
                                     ? FormatElapsed(elapsed) : elapsed;
 
+            // The validation after a download leaves the grid alone: it keeps the download's last values
+            // (validation progress shows in the status, progress bar and estimate). Tools > Validate Video
+            // File has no download, so its grid shows the validation.
+            bool updateGrid = !_isValidating || _validationOnly;
+
             Invoke(() =>
             {
-                UpdateGridRow("Frame", frame);
-                UpdateGridRow("FPS", fps);
-                UpdateGridRow("Size", displaySize);
-                UpdateGridRow("Time", AdjustedFeedback ? FormatElapsed(time) : time);
-                UpdateGridRow("Bitrate", bitrate);
-                UpdateGridRow("Speed", speed);
-                UpdateGridRow("Elapsed", displayElapsed);
+                if (updateGrid)
+                {
+                    UpdateGridRow("Frame", frame);
+                    UpdateGridRow("FPS", fps);
+                    UpdateGridRow("Size", displaySize);
+                    UpdateGridRow("Time", AdjustedFeedback ? FormatElapsed(time) : time);
+                    UpdateGridRow("Bitrate", bitrate);
+                    UpdateGridRow("Speed", speed);
+                    UpdateGridRow("Elapsed", displayElapsed);
+                }
                 progressBar.Value = percent;
                 lblEstimatedRemaining.Text = $"Estimated remaining time: {estimatedRemaining}";
                 TaskbarProgress.SetNormal(this, percent, 100);
@@ -782,6 +791,15 @@ namespace FFmpegAssistant
         private static string FormatClock(TimeSpan ts) => ts.TotalHours >= 1
             ? $"{(int)ts.TotalHours}:" + ts.ToString(@"mm\:ss")
             : $"{(int)ts.TotalMinutes}:{ts:ss}";
+
+        /// <summary>Time since the first Download click of this run, e.g. "15:11" or "1:05:12".</summary>
+        private string TotalTimeText() => FormatClock(_runStopwatch.Elapsed);
+
+        /// <summary>"Done" or "Done — the file has no subtitles" becomes "Done in 15:11 — ...".</summary>
+        private string WithTotalTime(string doneStatus) =>
+            doneStatus.StartsWith("Done", StringComparison.Ordinal)
+                ? $"Done in {TotalTimeText()}{doneStatus[4..]}"
+                : doneStatus;
 
         /// <summary>Converts FFmpeg size string (e.g. "73984KiB") to MB with one decimal.</summary>
         private static string FormatSize(string raw)
@@ -931,6 +949,7 @@ namespace FFmpegAssistant
                 return;
             }
 
+            if (!addToQueue) _runStopwatch.Restart(); // a new run: the total time counts from this click
             _downloadRunning = true;
             _preparingJob = true;
             UpdateRunButton();
@@ -958,6 +977,7 @@ namespace FFmpegAssistant
                 // outage) and more can be queued behind it. Otherwise it runs alone, as before the queue.
                 _queue.TryTakeOwnership();
                 _queue.ClearFinished();
+                if (addToQueue) _runStopwatch.Restart(); // the queue ended during the pre-fetch: this click starts a new run
             }
             _queue.Add(job);
 
@@ -1067,7 +1087,7 @@ namespace FFmpegAssistant
             {
                 if (done == finished.Count)
                 {
-                    SetStatus($"Done: all {finished.Count} downloads were successful.", StatusLevel.Success);
+                    SetStatus($"Done in {TotalTimeText()}: all {finished.Count} downloads were successful.", StatusLevel.Success);
                     NotifyDownloadFinished(finished[^1].Job.WatchMode, finished.Count);
                 }
                 else
@@ -1588,7 +1608,7 @@ namespace FFmpegAssistant
                             progressBar.Value = 100;
                             lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
                             TaskbarProgress.Clear(this);
-                            SetStatus("Done", StatusLevel.Success);
+                            SetStatus(WithTotalTime("Done"), StatusLevel.Success);
                             outcome = QueueStatus.Done; // RunQueueAsync notifies, after the last download
                             continue;
                         }
@@ -1638,7 +1658,7 @@ namespace FFmpegAssistant
                                 doneStatus = subtitleResult;
                             }
 
-                            SetStatus(doneStatus, StatusLevel.Success); // RunQueueAsync notifies, after the last download
+                            SetStatus(WithTotalTime(doneStatus), StatusLevel.Success); // RunQueueAsync notifies, after the last download
                         }
                         else
                         {
@@ -2011,7 +2031,7 @@ namespace FFmpegAssistant
                         btnOpenFile.Enabled = File.Exists(outputPath);
                         progressBar.Value = 100;
                         lblEstimatedRemaining.Text = "Estimated remaining time: 0:00:00";
-                        SetStatus("Done", StatusLevel.Success);
+                        SetStatus(WithTotalTime("Done"), StatusLevel.Success);
                         return (QueueStatus.Done, null);
                     }
 

@@ -285,6 +285,10 @@ download (see [What Happens During a Download](#what-happens-during-a-download))
 - **red**: something went wrong,
 - **green**: done.
 
+When everything is finished, the status reads for example "Done in 15:11". That is the total time
+from your first click on **Download**, including the check of the file, any retries and any other
+downloads in the queue. The table keeps the values of the download itself, not of the check.
+
 **Job** shows which download of the queue is running: `2/5` means the second of five. Click it to
 open the [Download Queue](#download-queue) window.
 
