@@ -26,6 +26,8 @@ namespace FFmpegAssistant
         public M3u8ContentType M3u8Type { get; init; }
         /// <summary>A live stream: the playlist has no end, so it is recorded until Stop Download (always in watch mode).</summary>
         public bool IsLive { get; init; }
+        /// <summary>The output file already existed when the download was prepared and the user said to overwrite it.</summary>
+        public bool OverwriteApproved { get; init; }
 
         [JsonIgnore] public string OutputPath => Path.Combine(Folder, FileName);
 

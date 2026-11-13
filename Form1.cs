@@ -1430,6 +1430,7 @@ namespace FFmpegAssistant
             }
 
             // Overwrite protection — always check the final output file
+            bool overwriteApproved = false;
             if (File.Exists(outputPath))
             {
                 var answer = MessageBox.Show(
@@ -1442,11 +1443,12 @@ namespace FFmpegAssistant
                         SetStatus("Download cancelled — file already exists.");
                     return null;
                 }
-                // Normal mode downloads to partPath so no -y needed for the final file.
-                // Watch mode: -y is added to the conversion step instead.
+                // The final file is checked again when it is written (ResolveFinalPath): the
+                // approval is remembered in the job, so this question isn't asked twice.
+                overwriteApproved = true;
             }
 
-            return job with { Command = command };
+            return job with { Command = command, OverwriteApproved = overwriteApproved };
         }
 
         /// <summary>
@@ -1463,7 +1465,8 @@ namespace FFmpegAssistant
             string? reason = null;
 
             string fileName = job.FileName;
-            string outputPath = job.OutputPath;
+            string outputPath = job.OutputPath; // may change: ResolveFinalPath can give the file another name
+            bool overwriteApproved = job.OverwriteApproved;
             string partPath = job.PartPath;
             string downloadPath = job.DownloadPath;
             bool isSrt = job.IsSrt;
@@ -1546,7 +1549,7 @@ namespace FFmpegAssistant
                     {
                         // "Stop Download" in watch mode: FFmpeg stopped cleanly, the .ts file is what was downloaded so far
                         _stopRequested = false;
-                        (outcome, reason) = await FinishStoppedWatchDownloadAsync(downloadPath, outputPath, logFile);
+                        (outcome, reason) = await FinishStoppedWatchDownloadAsync(downloadPath, outputPath, overwriteApproved, logFile);
                     }
                     else if (exitCode != 0)
                     {
@@ -1595,6 +1598,19 @@ namespace FFmpegAssistant
                         // If watch mode: convert .ts → final format before validating
                         if (watchMode)
                         {
+                            // A file with the final name may have appeared during the download
+                            string? convertTo = ResolveFinalPath(outputPath, overwriteApproved, downloadPath);
+                            if (convertTo == null)
+                            {
+                                (outcome, reason) = FinalFileNotWritten(downloadPath);
+                                continue;
+                            }
+                            if (!string.Equals(convertTo, outputPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                outputPath = convertTo;
+                                fileName = Path.GetFileName(outputPath);
+                            }
+
                             string finalExt = Path.GetExtension(outputPath).TrimStart('.');
                             SetStatus($"Converting to {finalExt}...");
                             TaskbarProgress.SetIndeterminate(this);
@@ -1644,6 +1660,18 @@ namespace FFmpegAssistant
                                 continue;
                             }
 
+                            string? srtPath = ResolveFinalPath(outputPath, overwriteApproved, partPath);
+                            if (srtPath == null)
+                            {
+                                (outcome, reason) = FinalFileNotWritten(partPath);
+                                continue;
+                            }
+                            if (!string.Equals(srtPath, outputPath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                outputPath = srtPath;
+                                fileName = Path.GetFileName(outputPath);
+                            }
+
                             SetStatus("Finalizing...");
                             if (File.Exists(outputPath)) File.Delete(outputPath);
                             File.Move(partPath, outputPath);
@@ -1679,6 +1707,19 @@ namespace FFmpegAssistant
                             // In normal mode: rename the (part) file to the final name now that it's verified
                             if (!watchMode)
                             {
+                                // A file with the final name may have appeared during the download
+                                string? finalPath = ResolveFinalPath(outputPath, overwriteApproved, partPath);
+                                if (finalPath == null)
+                                {
+                                    (outcome, reason) = FinalFileNotWritten(partPath);
+                                    continue;
+                                }
+                                if (!string.Equals(finalPath, outputPath, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    outputPath = finalPath;
+                                    fileName = Path.GetFileName(outputPath);
+                                }
+
                                 SetStatus("Finalizing...");
                                 if (File.Exists(outputPath)) File.Delete(outputPath);
                                 File.Move(partPath, outputPath);
@@ -2021,6 +2062,130 @@ namespace FFmpegAssistant
             btnClear.Enabled = true;
         }
 
+        /// <summary>
+        /// Decides where the finished download is saved, just before the final file is written. A file with that
+        /// name may have appeared while downloading (another program made it), and writing would replace it
+        /// silently. Returns the path to write to, or null if the user wants nothing written (the downloaded
+        /// temporary file is then kept). Nothing is asked when no file is there, or when the user already
+        /// said "overwrite" at the start and the file can be replaced.
+        /// In a queue nobody may be at the PC, so no question: the file gets a free name, "Name (2).mp4".
+        /// For one download the user can overwrite, enter a new name, or keep the downloaded file. If an
+        /// overwrite isn't possible (the file is in use) the user hears so and chooses again.
+        /// </summary>
+        private string? ResolveFinalPath(string outputPath, bool overwriteApproved, string downloadedFile)
+        {
+            string path = outputPath;
+            bool approved = overwriteApproved;
+            while (true)
+            {
+                if (!File.Exists(path)) return path;
+                bool inUse = approved && IsFileInUse(path);
+                if (approved && !inUse) return path;
+
+                if (IsQueueRun)
+                {
+                    string free = FindFreeFileName(path);
+                    WriteAppLog($"FINALIZE : \"{path}\" {(inUse ? "is in use" : "already exists")}; saved as \"{free}\" instead");
+                    return free;
+                }
+
+                TaskbarFlash.FlashIfInactive(this);
+                var overwrite = new TaskDialogButton("Overwrite");
+                var tryAgain = new TaskDialogButton("Try Again");
+                var newName = new TaskDialogButton("Enter a New Name");
+                var keep = new TaskDialogButton("Keep the Downloaded File");
+                var page = new TaskDialogPage
+                {
+                    Caption = AppTitle,
+                    Heading = inUse ? "The file can't be replaced." : "A file with this name has appeared.",
+                    Text = (inUse
+                            ? $"The file is in use by another program, or is read-only:\n\n{path}\n\n"
+                            : $"Another program has created this file while downloading:\n\n{path}\n\n") +
+                           $"The downloaded video is waiting here:\n\n{downloadedFile}",
+                    Icon = TaskDialogIcon.Warning,
+                    AllowCancel = true,
+                    DefaultButton = newName
+                };
+                page.Buttons.Add(inUse ? tryAgain : overwrite);
+                page.Buttons.Add(newName);
+                page.Buttons.Add(keep);
+
+                var result = TaskDialog.ShowDialog(this, page);
+                if (result == overwrite)
+                {
+                    approved = true; // if it is in use too, the loop says so and asks again
+                }
+                else if (result == tryAgain)
+                {
+                    // checked again at the top of the loop
+                }
+                else if (result == newName)
+                {
+                    string ext = Path.GetExtension(path);
+                    using var dialog = new SaveFileDialog
+                    {
+                        Title = "Enter a New File Name",
+                        InitialDirectory = Path.GetDirectoryName(path),
+                        FileName = Path.GetFileName(FindFreeFileName(path)),
+                        Filter = ext.Length > 0
+                            ? $"{ext.TrimStart('.').ToUpperInvariant()} files (*{ext})|*{ext}|All files (*.*)|*.*"
+                            : "All files (*.*)|*.*",
+                        OverwritePrompt = true
+                    };
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        path = dialog.FileName;
+                        approved = true; // the dialog has just asked about overwriting an existing file
+                        WriteAppLog($"FINALIZE : New file name chosen: {path}");
+                    }
+                    // Cancel: back to the question
+                }
+                else
+                {
+                    WriteAppLog($"FINALIZE : \"{path}\" is taken; the downloaded file was kept: {downloadedFile}");
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The result when the final file was not written because the user kept the downloaded
+        /// temporary file instead (see <see cref="ResolveFinalPath"/>).
+        /// </summary>
+        private (QueueStatus Outcome, string? Reason) FinalFileNotWritten(string downloadedFile)
+        {
+            progressBar.Value = 0;
+            lblEstimatedRemaining.Text = "Estimated remaining time: —";
+            TaskbarProgress.Clear(this);
+            SetStatus($"Not saved under the final name — the downloaded file was kept as {Path.GetFileName(downloadedFile)}.", StatusLevel.Warning);
+            return (QueueStatus.Failed, $"the file name was taken; the downloaded file was kept as {downloadedFile}");
+        }
+
+        /// <summary>True if the file can't be opened for writing right now (in use by another program, or read-only).</summary>
+        private static bool IsFileInUse(string path)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                return false;
+            }
+            catch (IOException) { return true; }
+            catch (UnauthorizedAccessException) { return true; }
+        }
+
+        /// <summary>"Name (2).mp4", "Name (3).mp4" ...: the first one that doesn't exist.</summary>
+        private static string FindFreeFileName(string path)
+        {
+            string folder = Path.GetDirectoryName(path) ?? "";
+            string name = Path.GetFileNameWithoutExtension(path);
+            string ext = Path.GetExtension(path);
+            for (int n = 2; ; n++)
+            {
+                string candidate = Path.Combine(folder, $"{name} ({n}){ext}");
+                if (!File.Exists(candidate)) return candidate;
+            }
+        }
+
         private void UpdateCancelButtonText()
         {
             btnCancel.Text = _watchDownloadRunning ? "Stop Download" : "Cancel";
@@ -2035,7 +2200,7 @@ namespace FFmpegAssistant
         /// doesn't want to convert, they choose whether to keep the .ts file.
         /// </summary>
         private async Task<(QueueStatus Outcome, string? Reason)> FinishStoppedWatchDownloadAsync(
-            string downloadPath, string outputPath, string logFile)
+            string downloadPath, string outputPath, bool overwriteApproved, string logFile)
         {
             progressBar.Value = 0;
             lblEstimatedRemaining.Text = "Estimated remaining time: —";
@@ -2056,8 +2221,22 @@ namespace FFmpegAssistant
                 "No: don't convert it.",
                 AppTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-            if (convertAnswer == DialogResult.Yes)
+            // A file with the final name may have appeared during the download: the user decides, and if
+            // they leave it alone the .ts file is kept
+            string? convertTo = convertAnswer == DialogResult.Yes
+                ? ResolveFinalPath(outputPath, overwriteApproved, downloadPath)
+                : null;
+            if (convertAnswer == DialogResult.Yes && convertTo == null)
             {
+                WriteAppLog("CONVERT  : Skipped — the file name is taken; .ts file kept");
+                SetStatus("Stopped — .ts file kept.");
+                return (QueueStatus.Done, null);
+            }
+
+            if (convertAnswer == DialogResult.Yes && convertTo != null)
+            {
+                outputPath = convertTo;
+                finalExt = Path.GetExtension(outputPath).TrimStart('.');
                 SetStatus($"Converting to {finalExt}...");
                 TaskbarProgress.SetIndeterminate(this);
                 WriteAppLog($"CONVERT  : {downloadPath} → {outputPath}");

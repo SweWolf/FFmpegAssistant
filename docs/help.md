@@ -333,6 +333,10 @@ FFmpeg Assistant does more than run the command:
    is not damaged. This is the "Validating downloaded file..." step. It is usually much faster
    than the download.
 3. **Rename it.** Only when the file is OK is `(part)` removed from the name.
+   If a file with that name has appeared in the meantime (another program may have created it),
+   you are asked what to do: overwrite it, enter a new name, or keep the downloaded file as it is.
+   If the file is in use and can't be replaced, you are told so and can choose again. In a queue
+   nothing is asked: the new file gets a free name such as `My Movie (2).mp4`.
 4. **Save the subtitles**, if **Save Subtitles as Separate Files** is checked (see
    [Save Subtitles as Separate Files](#save-subtitles-as-separate-files)).
 
